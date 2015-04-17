@@ -5,6 +5,7 @@
 --
 --
 --
+import Data.Char(toLower)
 import System.Environment
 import Network.Wreq(getWith, defaults, oauth2Token, auth, responseBody)
 import qualified Data.ByteString.Char8 as BSC
@@ -30,9 +31,15 @@ opts = do
 instance Show Environment where
   show (Environment _ _ name lastCommitter) = name ++ ": " ++ lastCommitter
 
+lowerString :: [Char] -> [Char]
+lowerString = map toLower
+
+
+gitUrlFor :: String -> GitUrl
+gitUrlFor envName = "git@heroku.com:zephyr-" ++ lowerString envName ++ ".git"
 
 gustEnvironments :: [Environment]
-gustEnvironments = Prelude.map (\(url, name) -> Environment "" url name "") [ ("git@heroku.com:zephyr-romeo.git", "Romeo"), ("git@heroku.com:zephyr-alpha.git", "Alpha"), ("git@heroku.com:zephyr-echo.git", "Echo"), ("git@heroku.com:zephyr-foxtrot.git", "Foxtrot"), ("git@heroku.com:zephyr-tango.git", "Tango"), ("git@heroku.com:zephyr-whiskey.git", "Whiskey") ] 
+gustEnvironments = Prelude.map (\name -> Environment "" (gitUrlFor name) name "") [ "Romeo", "Alpha", "Echo", "Foxtrot", "Tango", "Whiskey" ] 
 
 addSha :: Environment -> IO Environment
 addSha (Environment _ url name _) = do 
