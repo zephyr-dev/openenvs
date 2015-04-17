@@ -23,5 +23,8 @@ executable openenvs
     base >=4.7 && <4.8
     , process
     , split
+    , wreq
+    , lens
+    , bytestring
   -- hs-source-dirs:      
   default-language:    Haskell2010
