@@ -6,6 +6,7 @@
 --
 --
 import Network.Wreq(getWith, defaults, oauth2Token, auth, responseBody)
+import Control.Monad.Reader
 import qualified Data.Text as T
 import System.Process(readProcessWithExitCode)
 import Control.Lens((.~), (&), (^.), (?~))
@@ -50,7 +51,12 @@ lastDeployedSha gitUrl  = do
   let sha = head $ splitOn "\t" result
   return sha
 
+
+printHerokuEnvironments :: ReaderT String IO ()
+printHerokuEnvironments = do 
+  deploys <- liftIO lastDeploys 
+  liftIO $ mapM_ print deploys
+
 main :: IO ()
 main = do 
-  deploys <- lastDeploys 
-  mapM_ print deploys
+   runReaderT printHerokuEnvironments "Some Content"

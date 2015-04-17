@@ -29,6 +29,7 @@ executable openenvs
     , text
     , lens-aeson
     , monad-parallel
+    , mtl
 
   -- hs-source-dirs:      
   default-language:    Haskell2010
