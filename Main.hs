@@ -1,78 +1,59 @@
-{-# LANGUAGE OverloadedStrings #-}
---git ls-remote  git@heroku.com:zephyr-romeo.git
---GET /repos/:owner/:repo/commits/:sha
---curl -u zephyr-dev@googlegroups.com https://api.github.com/repos/zephyr-dev/gust/git/commits/77f5947728753cb7afe6f0cfb9ae71a3597bf7e3
---
---
---
 import Data.Char(toLower)
 import System.Environment
-import Network.Wreq(getWith, defaults, oauth2Token, auth, responseBody)
-import qualified Data.ByteString.Char8 as BSC
-import qualified Data.ByteString as BS
-import Control.Monad.Reader
 import qualified Data.Text as T
 import System.Process(readProcessWithExitCode)
-import Control.Lens((.~), (&), (^.), (?~))
-import Data.Aeson.Lens (key, _String)
-import Data.List.Split(splitOn)
 import qualified Control.Monad.Parallel as MP
-import qualified Data.ByteString.Lazy as BL
-
 type GitUrl = String
 type SHA = String
-
-data Environment = Environment { lastSHA :: String, gitUrl :: GitUrl, environmentName :: String, lastCommitter :: String }
-
-opts = do 
-  token <- ask 
-  return $ defaults & auth ?~ oauth2Token token
-
-instance Show Environment where
-  show (Environment _ _ name lastCommitter) = name ++ ": " ++ lastCommitter
-
 lowerString :: [Char] -> [Char]
 lowerString = map toLower
+
+data Environment = Environment { environmentName :: String, lastCommitter :: String }
+
+instance Show Environment where
+ show (Environment name lastCommitter) = name ++ ": " ++ lastCommitter
 
 
 gitUrlFor :: String -> GitUrl
 gitUrlFor envName = "git@heroku.com:zephyr-" ++ lowerString envName ++ ".git"
 
-gustEnvironments :: [Environment]
-gustEnvironments = Prelude.map (\name -> Environment "" (gitUrlFor name) name "") [ "Romeo", "Alpha", "Echo", "Foxtrot", "Tango", "Whiskey" ] 
+herokuFolderName = "/Users/gust/workspace/heroku_envs/"
 
-addSha :: Environment -> IO Environment
-addSha (Environment _ url name _) = do 
-  sha <- lastDeployedSha url 
-  return (Environment sha url name "")
+makeHerokuFolder = readProcessWithExitCode "mkdir" [herokuFolderName] ""
 
-addLastCommitter :: Environment -> ReaderT BS.ByteString IO Environment
-addLastCommitter (Environment sha url name _) = do 
-  options <- opts
-  res <- liftIO $ getWith options $ "https://api.github.com/repos/zephyr-dev/gust/git/commits/" ++ sha
-  let commiterName = T.unpack $ res ^. responseBody . key "committer" . key "name" . _String
-  return (Environment sha url name commiterName)
+fileNameForEnv :: String -> String
+fileNameForEnv name = "zephyr-" ++ lowerString name
 
+pullRepo name = do
+  putStrLn $ "Checking: " ++ name
+  readProcessWithExitCode "git" ["-C", herokuFolderName ++ (fileNameForEnv name), "pull", "-s", "ours"] ""
+  processEnvironment name
 
+cloneRepo name = do 
+  let url = gitUrlFor name
+  putStrLn $ "Creating a local copy of: " ++ name ++ " in " ++ herokuFolderName ++ fileNameForEnv name
+  readProcessWithExitCode "git" ["-C", herokuFolderName, "clone", url] ""
+  processEnvironment name
 
-lastDeploys :: ReaderT BS.ByteString IO [Environment]
-lastDeploys = do 
-  environments <- liftIO $ MP.mapM addSha gustEnvironments
-  MP.mapM addLastCommitter environments
+repoExists :: String -> String -> Bool
+repoExists name dirContents = T.isInfixOf (T.pack $ fileNameForEnv name) (T.pack dirContents)
 
-lastDeployedSha :: GitUrl -> IO SHA
-lastDeployedSha gitUrl  = do 
-  (_, result, _) <- readProcessWithExitCode "git" ["ls-remote", gitUrl] ""
-  let sha = Prelude.head $ splitOn "\t" result
-  return sha
+createOrUpdateRepo name = do
+  (_, dirContents, _) <- readProcessWithExitCode "ls" [herokuFolderName] ""
+  if (repoExists name dirContents) then pullRepo name
+  else cloneRepo name
 
+analyzeCommits :: String -> IO Environment
+analyzeCommits environment = do 
+  (_, name, _) <- readProcessWithExitCode "git" ["-C", herokuFolderName ++ fileNameForEnv environment, "show", "--format=format:\"%an\"", "-s"] ""
+  return $ Environment environment (read name)
 
-printHerokuEnvironments :: ReaderT BS.ByteString IO ()
-printHerokuEnvironments = do 
-  deploys <- lastDeploys 
-  liftIO $ mapM_ print deploys
+environmentNames = [ "Alpha", "Echo", "Foxtrot", "Juliet", "Romeo", "Tango", "Whiskey" ] 
+
+processEnvironment envName = do
+  analyzeCommits envName >>= putStrLn . show
 
 main :: IO ()
 main = do 
-   token <- getEnv "GITHUB_TOKEN"
-   runReaderT printHerokuEnvironments $ BSC.pack token
+  makeHerokuFolder
+  MP.mapM createOrUpdateRepo environmentNames >> return ()

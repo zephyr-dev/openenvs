@@ -22,14 +22,8 @@ executable openenvs
   build-depends:       
     base >=4.7 && <4.8
     , process
-    , split
-    , wreq
-    , lens
-    , bytestring
     , text
-    , lens-aeson
     , monad-parallel
-    , mtl
 
   -- hs-source-dirs:      
   default-language:    Haskell2010
