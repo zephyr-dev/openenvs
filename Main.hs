@@ -1,6 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 import Data.Char(toLower)
+import Data.Time.Format     (parseTime)
+import Data.Time.Clock      (UTCTime)
 import System.Console.ANSI
+import System.Locale        (defaultTimeLocale)
 import qualified Network.HTTP.Types as NHT
 import Control.Exception as E
 import Network.HTTP.Conduit(HttpException(StatusCodeException) )
@@ -29,17 +32,19 @@ lowerString = map toLower
 
 data Environment = Environment { environmentName :: EnvironmentName, lastCommitter :: String, storiesAccepted :: Bool, recentStories :: [PivotalStory] }
 
-datesOfUnacceptedStories :: [PivotalStory] -> String
-datesOfUnacceptedStories xs = foldr combineDateAndStatus "  " unacceptedStories  where
-  unacceptedStories = filter (not . storyAccepted) xs
-  combineDateAndStatus story acc = acc ++ T.unpack (pivotalStoryStatus story) ++ " " ++  parseUpdatedAt (storyUpdatedAt story) ++ "  "
+storyStatuses :: [PivotalStory] -> String
+storyStatuses xs = "  " ++ show (length notRejectedStories) ++ " pending acceptance as of " ++ mostRecentSubmittedStory ++ " and "  ++ show (length rejectedStories) ++ " rejected" where
+  mostRecentSubmittedStory = MB.maybe "" show $ MB.listToMaybe . DL.sort $ MB.catMaybes $ map storyUpdatedAt notRejectedStories
+  rejectedStories = filter storyRejected xs
+  notRejectedStories = filter (not . storyRejected) xs
+  {- combineDateAndStatus story acc = acc ++ T.unpack (pivotalStoryStatus story) ++ " " ++  show (storyUpdatedAt story) ++ "  " -}
 
-parseUpdatedAt :: T.Text -> String
-parseUpdatedAt = T.unpack . (T.takeWhile (/= 'T'))
+storyRejected :: PivotalStory -> Bool
+storyRejected story = pivotalStoryStatus story == "rejected"
 
 instance Show Environment where
- show (Environment name lastCommitter True stories) = setSGRCode [SetColor Foreground Dull Green] ++ name ++ ": " ++ read lastCommitter ++ datesOfUnacceptedStories stories ++ "\x1b[0m" 
- show (Environment name lastCommitter False stories) = setSGRCode [SetColor Foreground Dull Red] ++  name ++ ": " ++ read lastCommitter ++ datesOfUnacceptedStories stories ++ "\x1b[0m"
+ show (Environment name lastCommitter True stories) = setSGRCode [SetColor Foreground Dull Green] ++ name ++ ": " ++ read lastCommitter ++ storyStatuses stories ++ "\x1b[0m" 
+ show (Environment name lastCommitter False stories) = setSGRCode [SetColor Foreground Dull Red] ++  name ++ ": " ++ read lastCommitter ++ storyStatuses stories ++ "\x1b[0m"
 
 
 gitUrlFor :: String -> GitUrl
@@ -79,7 +84,10 @@ lastCommitterName environment = do
  return name
 
 
-data PivotalStory = PivotalStory { pivotalStoryStatus :: T.Text, storyUpdatedAt :: T.Text }
+data PivotalStory = PivotalStory { pivotalStoryStatus :: T.Text, storyUpdatedAt :: Maybe UTCTime } deriving Show
+
+textToDate  :: String -> Maybe UTCTime
+textToDate  = parseTime defaultTimeLocale "%FT%X%QZ"
 
 pivotalStories :: [StoryId] -> IO [PivotalStory]
 pivotalStories storyIds = mapM getStory storyIds where
@@ -90,16 +98,15 @@ pivotalStories storyIds = mapM getStory storyIds where
     res <- tryRequest (getWith options $ "https://www.pivotaltracker.com/services/v5/stories/" ++ storyId) 
     case res of 
       Right response -> do 
-        let updatedAt = response ^. responseBody . key "updated_at" . _String
+        let updatedAt = textToDate . T.unpack $ response ^. responseBody . key "updated_at" . _String
         let state =  response ^. responseBody . key "current_state" . _String
         return $ PivotalStory state updatedAt
       Left (StatusCodeException status headers _) -> do
         case NHT.statusCode status of
-          403 -> return $ PivotalStory "invalid_story_id" ""
-          404 -> return $ PivotalStory "invalid_story_id" ""
+          404 -> return $ PivotalStory "invalid_story_id" Nothing
           _   -> do
             putStrLn $ "Could not process request for story: " ++ storyId ++ " defaulting to not accepted"
-            return $ PivotalStory "not_accepted" ""
+            return $ PivotalStory "not_accepted" Nothing
     where 
       tryRequest :: IO a ->  IO (Either HttpException a)
       tryRequest = E.try
@@ -130,6 +137,7 @@ analyzeCommits :: EnvironmentName -> IO Environment
 analyzeCommits environment = do 
   name <- lastCommitterName environment
   stories <- (pivotalStories <=< parseStoryIds) environment
+  mapM_ print stories
   let isFree = all storyAccepted stories
   return $ Environment { lastCommitter = name, environmentName = environment, storiesAccepted = isFree, recentStories = stories }
 
