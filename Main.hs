@@ -27,11 +27,19 @@ type EnvironmentName = String
 lowerString :: [Char] -> [Char]
 lowerString = map toLower
 
-data Environment = Environment { environmentName :: EnvironmentName, lastCommitter :: String, storiesAccepted :: Bool }
+data Environment = Environment { environmentName :: EnvironmentName, lastCommitter :: String, storiesAccepted :: Bool, recentStories :: [PivotalStory] }
+
+datesOfUnacceptedStories :: [PivotalStory] -> String
+datesOfUnacceptedStories xs = foldr combineDateAndStatus "  " unacceptedStories  where
+  unacceptedStories = filter (not . storyAccepted) xs
+  combineDateAndStatus story acc = acc ++ T.unpack (pivotalStoryStatus story) ++ " " ++  parseUpdatedAt (storyUpdatedAt story) ++ "  "
+
+parseUpdatedAt :: T.Text -> String
+parseUpdatedAt = T.unpack . (T.takeWhile (/= 'T'))
 
 instance Show Environment where
- show (Environment name lastCommitter True) = setSGRCode [SetColor Foreground Dull Green] ++ name ++ ": " ++ read lastCommitter ++ "\x1b[0m"
- show (Environment name lastCommitter False) = setSGRCode [SetColor Foreground Dull Red] ++  name ++ ": " ++ read lastCommitter ++ "\x1b[0m"
+ show (Environment name lastCommitter True stories) = setSGRCode [SetColor Foreground Dull Green] ++ name ++ ": " ++ read lastCommitter ++ datesOfUnacceptedStories stories ++ "\x1b[0m" 
+ show (Environment name lastCommitter False stories) = setSGRCode [SetColor Foreground Dull Red] ++  name ++ ": " ++ read lastCommitter ++ datesOfUnacceptedStories stories ++ "\x1b[0m"
 
 
 gitUrlFor :: String -> GitUrl
@@ -70,31 +78,34 @@ lastCommitterName environment = do
  (_, name,_) <- readProcessWithExitCode "git" ["-C", herokuFolderName ++ fileNameForEnv environment, "show", "--format=format:\"%an\"", "-s"] ""
  return name
 
-pivotalStoriesAccepted :: [String] -> IO Bool
-pivotalStoriesAccepted storyIds = (liftM allStoriesCompleted) $ mapM getStoryState storyIds where
-  getStoryState :: StoryId -> IO T.Text
-  getStoryState storyId = do 
+
+data PivotalStory = PivotalStory { pivotalStoryStatus :: T.Text, storyUpdatedAt :: T.Text }
+
+pivotalStories :: [StoryId] -> IO [PivotalStory]
+pivotalStories storyIds = mapM getStory storyIds where
+  getStory :: StoryId -> IO PivotalStory
+  getStory storyId = do 
     apiToken <- liftM BCH.pack $ getEnv "PIVOTAL_TRACKER_API_TOKEN"
     let options = defaults & header "X-TrackerToken" .~ [apiToken] 
     res <- tryRequest (getWith options $ "https://www.pivotaltracker.com/services/v5/stories/" ++ storyId) 
     case res of 
-      Right response -> return $ response ^. responseBody . key "current_state" . _String
+      Right response -> do 
+        let updatedAt = response ^. responseBody . key "updated_at" . _String
+        let state =  response ^. responseBody . key "current_state" . _String
+        return $ PivotalStory state updatedAt
       Left (StatusCodeException status headers _) -> do
         case NHT.statusCode status of
-          403 -> return "invalid_story_id"
-          404 -> return "invalid_story_id"
+          403 -> return $ PivotalStory "invalid_story_id" ""
+          404 -> return $ PivotalStory "invalid_story_id" ""
           _   -> do
             putStrLn $ "Could not process request for story: " ++ storyId ++ " defaulting to not accepted"
-            return "unaccepted"
+            return $ PivotalStory "not_accepted" ""
     where 
       tryRequest :: IO a ->  IO (Either HttpException a)
       tryRequest = E.try
 
-  allStoriesCompleted :: [T.Text] -> Bool
-  allStoriesCompleted = all acceptedOrInvalidId where
-    acceptedOrInvalidId :: T.Text -> Bool
-    acceptedOrInvalidId status = status == "accepted" || status == "invalid_story_id"
-
+storyAccepted :: PivotalStory -> Bool
+storyAccepted story = pivotalStoryStatus story == "accepted" || pivotalStoryStatus story == "invalid_story_id"
 
 parseStoryIds :: String -> IO [StoryId]
 parseStoryIds env = liftM storyIdForCommit commitMessages  where
@@ -103,6 +114,7 @@ parseStoryIds env = liftM storyIdForCommit commitMessages  where
     where
       parseStoryId :: String -> Maybe [StoryId]
       parseStoryId = TR.matchRegex (TR.mkRegex "#([0-9]*)")
+
   commitMessages :: IO [String]
   commitMessages = do 
     messages <- mapM commitMessage [0..12]
@@ -117,8 +129,9 @@ parseStoryIds env = liftM storyIdForCommit commitMessages  where
 analyzeCommits :: EnvironmentName -> IO Environment
 analyzeCommits environment = do 
   name <- lastCommitterName environment
-  isFree <- (pivotalStoriesAccepted <=< parseStoryIds) environment
-  return $ Environment { lastCommitter = name, environmentName = environment, storiesAccepted = isFree }
+  stories <- (pivotalStories <=< parseStoryIds) environment
+  let isFree = all storyAccepted stories
+  return $ Environment { lastCommitter = name, environmentName = environment, storiesAccepted = isFree, recentStories = stories }
 
 environmentNames = [ "Alpha", "Echo", "Foxtrot", "Juliet", "Romeo", "Tango", "Whiskey" ] 
 
