@@ -24,6 +24,14 @@ executable openenvs
     , process
     , text
     , monad-parallel
+    , regex-compat
+    , wreq
+    , lens
+    , lens-aeson
+    , bytestring
+    , http-conduit
+    , http-types
+    , ansi-terminal
 
   -- hs-source-dirs:      
   default-language:    Haskell2010
