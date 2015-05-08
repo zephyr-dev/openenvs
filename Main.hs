@@ -30,8 +30,8 @@ lowerString = map toLower
 data Environment = Environment { environmentName :: EnvironmentName, lastCommitter :: String, storiesAccepted :: Bool }
 
 instance Show Environment where
- show (Environment name lastCommitter True) = setSGRCode [SetColor Foreground Dull Green] ++ name ++ ": " ++ lastCommitter ++ "\x1b[0m"
- show (Environment name lastCommitter False) = setSGRCode [SetColor Foreground Dull Red] ++  name ++ ": " ++ lastCommitter ++ "\x1b[0m"
+ show (Environment name lastCommitter True) = setSGRCode [SetColor Foreground Dull Green] ++ name ++ ": " ++ read lastCommitter ++ "\x1b[0m"
+ show (Environment name lastCommitter False) = setSGRCode [SetColor Foreground Dull Red] ++  name ++ ": " ++ read lastCommitter ++ "\x1b[0m"
 
 
 gitUrlFor :: String -> GitUrl
