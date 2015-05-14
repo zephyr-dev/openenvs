@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 import Data.Char(toLower)
-import Data.Time.Format     (parseTime)
+import Control.Applicative((<$>))
+import Data.Time.Format     (parseTime, formatTime)
 import Data.Time.Clock      (UTCTime)
 import System.Console.ANSI
 import System.Locale        (defaultTimeLocale)
@@ -33,14 +34,11 @@ lowerString = map toLower
 data Environment = Environment { environmentName :: EnvironmentName, lastCommitter :: String, storiesAccepted :: Bool, recentStories :: [PivotalStory] }
 
 storyStatuses :: [PivotalStory] -> String
-storyStatuses xs = "  " ++ show (length notRejectedStories) ++ " pending acceptance as of " ++ mostRecentSubmittedStory ++ " and "  ++ show (length rejectedStories) ++ " rejected" where
-  mostRecentSubmittedStory = MB.maybe "" show $ MB.listToMaybe . DL.sort $ MB.catMaybes $ map storyUpdatedAt notRejectedStories
-  rejectedStories = filter storyRejected xs
-  notRejectedStories = filter (not . storyRejected) xs
-  {- combineDateAndStatus story acc = acc ++ T.unpack (pivotalStoryStatus story) ++ " " ++  show (storyUpdatedAt story) ++ "  " -}
-
-storyRejected :: PivotalStory -> Bool
-storyRejected story = pivotalStoryStatus story == "rejected"
+storyStatuses xs = let dateString = if (length pendingAcceptance > 0)  then "as of " ++ mostRecentSubmittedStoryDate else "" in
+                    " " ++ show (length pendingAcceptance) ++ " stories pending acceptance "  ++ dateString where
+  mostRecentSubmittedStoryDate = MB.maybe "" id $ formatTime defaultTimeLocale "%D" <$> lastSubmittedDate
+  lastSubmittedDate = MB.listToMaybe . reverse . DL.sort  . MB.catMaybes $ map storyUpdatedAt pendingAcceptance
+  pendingAcceptance = filter (not . storyAccepted) xs
 
 instance Show Environment where
  show (Environment name lastCommitter True stories) = setSGRCode [SetColor Foreground Dull Green] ++ name ++ ": " ++ read lastCommitter ++ storyStatuses stories ++ "\x1b[0m" 
@@ -103,6 +101,7 @@ pivotalStories storyIds = mapM getStory storyIds where
         return $ PivotalStory state updatedAt
       Left (StatusCodeException status headers _) -> do
         case NHT.statusCode status of
+          403 -> return $ PivotalStory "invalid_story_id" Nothing
           404 -> return $ PivotalStory "invalid_story_id" Nothing
           _   -> do
             putStrLn $ "Could not process request for story: " ++ storyId ++ " defaulting to not accepted"
@@ -137,7 +136,6 @@ analyzeCommits :: EnvironmentName -> IO Environment
 analyzeCommits environment = do 
   name <- lastCommitterName environment
   stories <- (pivotalStories <=< parseStoryIds) environment
-  mapM_ print stories
   let isFree = all storyAccepted stories
   return $ Environment { lastCommitter = name, environmentName = environment, storiesAccepted = isFree, recentStories = stories }
 
