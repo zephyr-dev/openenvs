@@ -34,7 +34,9 @@ lowerString = map toLower
 data Environment = Environment { environmentName :: EnvironmentName, lastCommitter :: String, storiesAccepted :: Bool, recentStories :: [PivotalStory] }
 
 storyStatuses :: [PivotalStory] -> String
-storyStatuses xs = let dateString = if (length pendingAcceptance > 0)  then "as of " ++ mostRecentSubmittedStoryDate else "" in
+storyStatuses xs = let dateString = if (length pendingAcceptance > 0)  then 
+                                      "since " ++ mostRecentSubmittedStoryDate 
+                                      else "" in
                     " " ++ show (length pendingAcceptance) ++ " stories pending acceptance "  ++ dateString where
   mostRecentSubmittedStoryDate = MB.maybe "" id $ formatTime defaultTimeLocale "%D" <$> lastSubmittedDate
   lastSubmittedDate = MB.listToMaybe . reverse . DL.sort  . MB.catMaybes $ map storyUpdatedAt pendingAcceptance
@@ -101,6 +103,7 @@ pivotalStories storyIds = mapM getStory storyIds where
         return $ PivotalStory state updatedAt
       Left (StatusCodeException status headers _) -> do
         case NHT.statusCode status of
+          -- We get a 403 when someone links to an epic
           403 -> return $ PivotalStory "invalid_story_id" Nothing
           404 -> return $ PivotalStory "invalid_story_id" Nothing
           _   -> do
