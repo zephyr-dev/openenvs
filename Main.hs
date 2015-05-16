@@ -32,6 +32,11 @@ lowerString :: [Char] -> [Char]
 lowerString = map toLower
 
 data Environment = Environment { environmentName :: EnvironmentName, lastCommitter :: String, storiesAccepted :: Bool, recentStories :: [PivotalStory] }
+data PivotalStory = PivotalStory { pivotalStoryStatus :: T.Text, storyUpdatedAt :: Maybe UTCTime } deriving Show
+
+instance Show Environment where
+ show (Environment name lastCommitter True stories) = setSGRCode [SetColor Foreground Dull Green] ++ name ++ ": " ++ read lastCommitter ++ storyStatuses stories ++ "\x1b[0m" 
+ show (Environment name lastCommitter False stories) = setSGRCode [SetColor Foreground Dull Red] ++  name ++ ": " ++ read lastCommitter ++ storyStatuses stories ++ "\x1b[0m"
 
 storyStatuses :: [PivotalStory] -> String
 storyStatuses xs = let dateString = if (length pendingAcceptance > 0)  then 
@@ -42,30 +47,29 @@ storyStatuses xs = let dateString = if (length pendingAcceptance > 0)  then
   lastSubmittedDate = MB.listToMaybe . reverse . DL.sort  . MB.catMaybes $ map storyUpdatedAt pendingAcceptance
   pendingAcceptance = filter (not . storyAccepted) xs
 
-instance Show Environment where
- show (Environment name lastCommitter True stories) = setSGRCode [SetColor Foreground Dull Green] ++ name ++ ": " ++ read lastCommitter ++ storyStatuses stories ++ "\x1b[0m" 
- show (Environment name lastCommitter False stories) = setSGRCode [SetColor Foreground Dull Red] ++  name ++ ": " ++ read lastCommitter ++ storyStatuses stories ++ "\x1b[0m"
-
 
 gitUrlFor :: String -> GitUrl
 gitUrlFor envName = "git@heroku.com:zephyr-" ++ lowerString envName ++ ".git"
 
 herokuFolderName = "/Users/gust/workspace/heroku_envs/"
 
-makeHerokuFolder = readProcessWithExitCode "mkdir" [herokuFolderName] ""
+{- mkDir String -> IO -}
+mkDir folderName = readProcessWithExitCode "mkdir" [folderName] ""
 
 fileNameForEnv :: String -> String
 fileNameForEnv name = "zephyr-" ++ lowerString name
 
+pullRepo :: EnvironmentName -> IO ()
 pullRepo name = do
   readProcessWithExitCode "git" ["-C", herokuFolderName ++ (fileNameForEnv name), "pull", "-s", "ours"] ""
-  processEnvironment name
+  checkEnvironmentStatus name
 
+cloneRepo :: EnvironmentName -> IO ()
 cloneRepo name = do 
   let url = gitUrlFor name
   putStrLn $ "Creating a local copy of: " ++ name ++ " in " ++ herokuFolderName ++ fileNameForEnv name
   readProcessWithExitCode "git" ["-C", herokuFolderName, "clone", url] ""
-  processEnvironment name
+  checkEnvironmentStatus name
 
 hasLocalCopyOfRepo :: String -> IO Bool
 hasLocalCopyOfRepo name = do 
@@ -74,8 +78,11 @@ hasLocalCopyOfRepo name = do
 
 checkRepo name = do
   isTrue <- hasLocalCopyOfRepo name 
-  if isTrue then pullRepo name
-  else cloneRepo name
+  if isTrue then pullRepo name >> checkEnvironmentStatus name
+  else cloneRepo name >> checkEnvironmentStatus name
+
+{- pullAndCheckStatus = pullRepo . checkEnvironmentStatus -}
+{- cloneAndCheckStatus = cloneRepo . checkEnvironmentStatus -}
 
 
 lastCommitterName :: String -> IO String
@@ -84,7 +91,6 @@ lastCommitterName environment = do
  return name
 
 
-data PivotalStory = PivotalStory { pivotalStoryStatus :: T.Text, storyUpdatedAt :: Maybe UTCTime } deriving Show
 
 textToDate  :: String -> Maybe UTCTime
 textToDate  = parseTime defaultTimeLocale "%FT%X%QZ"
@@ -144,11 +150,12 @@ analyzeCommits environment = do
 
 environmentNames = [ "Alpha", "Echo", "Foxtrot", "Juliet", "Romeo", "Tango", "Whiskey" ] 
 
-processEnvironment envName = do
+checkEnvironmentStatus :: EnvironmentName -> IO ()
+checkEnvironmentStatus envName = do
   analyzeCommits envName >>= putStrLn . show
 
 main :: IO ()
 main = do 
-  makeHerokuFolder
+  mkDir herokuFolderName
   putStrLn "Checking environments"
   MP.mapM checkRepo environmentNames >> return ()
