@@ -24,15 +24,10 @@ import System.Process(readProcessWithExitCode)
 import qualified Control.Monad.Parallel as MP
 
 type GitUrl = String
+type CommitMessage = String
 type SHA = String
 type StoryId = String
 type EnvironmentName = String
-
-lowerString :: [Char] -> [Char]
-lowerString = map toLower
-
-colorGreen string = setSGRCode [SetColor Foreground Dull Green] ++ string ++ "\x1b[0m" 
-colorRed string = setSGRCode [SetColor Foreground Dull Red] ++ string ++ "\x1b[0m"
 
 data Environment = Environment { environmentName :: EnvironmentName, lastCommitter :: String, recentStories :: [PivotalStory] }
 data PivotalStory = PivotalStory { pivotalStoryStatus :: T.Text, storyUpdatedAt :: Maybe UTCTime } deriving Show
@@ -41,6 +36,12 @@ instance Show Environment where
  show (Environment name lastCommitter stories) 
     | all storyAccepted stories = colorGreen $ name ++ ": " ++ read lastCommitter ++ storyStatuses stories
     | otherwise                 = colorRed $ name ++ ": " ++ read lastCommitter ++ storyStatuses stories
+
+lowerString :: [Char] -> [Char]
+lowerString = map toLower
+
+colorGreen string = setSGRCode [SetColor Foreground Dull Green] ++ string ++ "\x1b[0m" 
+colorRed string = setSGRCode [SetColor Foreground Dull Red] ++ string ++ "\x1b[0m"
 
 storyStatuses :: [PivotalStory] -> String
 storyStatuses xs = let dateString = if (length pendingAcceptance > 0)  then 
@@ -65,14 +66,14 @@ fileNameForEnv name = "zephyr-" ++ lowerString name
 pullRepo :: EnvironmentName -> IO ()
 pullRepo name = do
   readProcessWithExitCode "git" ["-C", herokuFolderPath ++ (fileNameForEnv name), "pull", "-s", "ours"] ""
-  checkEnvironmentStatus name
+  return ()
 
 cloneRepo :: EnvironmentName -> IO ()
 cloneRepo name = do 
   let url = gitUrlFor name
-  putStrLn $ "Creating a local copy of: " ++ name ++ " in " ++ herokuFolderPath ++ fileNameForEnv name
+  putStrLn $ "Creating a local copy of: " ++ name ++ " in " ++ herokuFolderPath ++ fileNameForEnv name ++ " this might take a minute"
   readProcessWithExitCode "git" ["-C", herokuFolderPath, "clone", url] ""
-  checkEnvironmentStatus name
+  return ()
 
 hasLocalCopyOfRepo :: String -> IO Bool
 hasLocalCopyOfRepo name = do 
@@ -83,10 +84,6 @@ checkRepo name = do
   isTrue <- hasLocalCopyOfRepo name 
   if isTrue then pullRepo name >> checkEnvironmentStatus name
   else cloneRepo name >> checkEnvironmentStatus name
-
-{- pullAndCheckStatus = pullRepo . checkEnvironmentStatus -}
-{- cloneAndCheckStatus = cloneRepo . checkEnvironmentStatus -}
-
 
 lastCommitterName :: String -> IO String
 lastCommitterName environment = do 
@@ -125,15 +122,15 @@ pivotalStories storyIds = mapM getStory storyIds where
 storyAccepted :: PivotalStory -> Bool
 storyAccepted story = pivotalStoryStatus story == "accepted" || pivotalStoryStatus story == "invalid_story_id"
 
-parseStoryIds :: String -> IO [StoryId]
-parseStoryIds env = liftM storyIdForCommit commitMessages  where
-  storyIdForCommit :: [String] -> [StoryId]
-  storyIdForCommit commitMessages = DL.nub . concat $ MB.mapMaybe parseStoryId commitMessages
+parseStoryIds :: EnvironmentName -> IO [StoryId]
+parseStoryIds env = liftM storyIdsFromCommits commitMessages  where
+  storyIdsFromCommits :: [CommitMessage] -> [StoryId]
+  storyIdsFromCommits = DL.nub . concat . (MB.mapMaybe parseStoryId)
     where
-      parseStoryId :: String -> Maybe [StoryId]
+      parseStoryId :: CommitMessage -> Maybe [StoryId]
       parseStoryId = TR.matchRegex (TR.mkRegex "#([0-9]*)")
 
-  commitMessages :: IO [String]
+  commitMessages :: IO [CommitMessage]
   commitMessages = do 
     messages <- mapM commitMessage [0..12]
     return $ messages
