@@ -31,29 +31,32 @@ type EnvironmentName = String
 lowerString :: [Char] -> [Char]
 lowerString = map toLower
 
-data Environment = Environment { environmentName :: EnvironmentName, lastCommitter :: String, storiesAccepted :: Bool, recentStories :: [PivotalStory] }
+colorGreen string = setSGRCode [SetColor Foreground Dull Green] ++ string ++ "\x1b[0m" 
+colorRed string = setSGRCode [SetColor Foreground Dull Red] ++ string ++ "\x1b[0m"
+
+data Environment = Environment { environmentName :: EnvironmentName, lastCommitter :: String, recentStories :: [PivotalStory] }
 data PivotalStory = PivotalStory { pivotalStoryStatus :: T.Text, storyUpdatedAt :: Maybe UTCTime } deriving Show
 
 instance Show Environment where
- show (Environment name lastCommitter True stories) = setSGRCode [SetColor Foreground Dull Green] ++ name ++ ": " ++ read lastCommitter ++ storyStatuses stories ++ "\x1b[0m" 
- show (Environment name lastCommitter False stories) = setSGRCode [SetColor Foreground Dull Red] ++  name ++ ": " ++ read lastCommitter ++ storyStatuses stories ++ "\x1b[0m"
+ show (Environment name lastCommitter stories) 
+    | all storyAccepted stories = colorGreen $ name ++ ": " ++ read lastCommitter ++ storyStatuses stories
+    | otherwise                 = colorRed $ name ++ ": " ++ read lastCommitter ++ storyStatuses stories
 
 storyStatuses :: [PivotalStory] -> String
 storyStatuses xs = let dateString = if (length pendingAcceptance > 0)  then 
-                                      "since " ++ mostRecentSubmittedStoryDate 
+                                      "since " ++ formattedLastUpdatedDate 
                                       else "" in
                     " " ++ show (length pendingAcceptance) ++ " stories pending acceptance "  ++ dateString where
-  mostRecentSubmittedStoryDate = MB.maybe "" id $ formatTime defaultTimeLocale "%D" <$> lastSubmittedDate
-  lastSubmittedDate = MB.listToMaybe . reverse . DL.sort  . MB.catMaybes $ map storyUpdatedAt pendingAcceptance
+  formattedLastUpdatedDate = MB.maybe "" id $ formatTime defaultTimeLocale "%D" <$> lastUpdatedDate
+  lastUpdatedDate = MB.listToMaybe . reverse . DL.sort  . MB.catMaybes $ map storyUpdatedAt pendingAcceptance
   pendingAcceptance = filter (not . storyAccepted) xs
 
 
 gitUrlFor :: String -> GitUrl
 gitUrlFor envName = "git@heroku.com:zephyr-" ++ lowerString envName ++ ".git"
 
-herokuFolderName = "/Users/gust/workspace/heroku_envs/"
+herokuFolderPath = "/Users/gust/workspace/heroku_envs/"
 
-{- mkDir String -> IO -}
 mkDir folderName = readProcessWithExitCode "mkdir" [folderName] ""
 
 fileNameForEnv :: String -> String
@@ -61,19 +64,19 @@ fileNameForEnv name = "zephyr-" ++ lowerString name
 
 pullRepo :: EnvironmentName -> IO ()
 pullRepo name = do
-  readProcessWithExitCode "git" ["-C", herokuFolderName ++ (fileNameForEnv name), "pull", "-s", "ours"] ""
+  readProcessWithExitCode "git" ["-C", herokuFolderPath ++ (fileNameForEnv name), "pull", "-s", "ours"] ""
   checkEnvironmentStatus name
 
 cloneRepo :: EnvironmentName -> IO ()
 cloneRepo name = do 
   let url = gitUrlFor name
-  putStrLn $ "Creating a local copy of: " ++ name ++ " in " ++ herokuFolderName ++ fileNameForEnv name
-  readProcessWithExitCode "git" ["-C", herokuFolderName, "clone", url] ""
+  putStrLn $ "Creating a local copy of: " ++ name ++ " in " ++ herokuFolderPath ++ fileNameForEnv name
+  readProcessWithExitCode "git" ["-C", herokuFolderPath, "clone", url] ""
   checkEnvironmentStatus name
 
 hasLocalCopyOfRepo :: String -> IO Bool
 hasLocalCopyOfRepo name = do 
-  (_, localDirContents, _) <- readProcessWithExitCode "ls" [herokuFolderName] ""
+  (_, localDirContents, _) <- readProcessWithExitCode "ls" [herokuFolderPath] ""
   return $ T.isInfixOf (T.pack $ fileNameForEnv name) (T.pack localDirContents)
 
 checkRepo name = do
@@ -87,7 +90,7 @@ checkRepo name = do
 
 lastCommitterName :: String -> IO String
 lastCommitterName environment = do 
- (_, name,_) <- readProcessWithExitCode "git" ["-C", herokuFolderName ++ fileNameForEnv environment, "show", "--format=format:\"%an\"", "-s"] ""
+ (_, name,_) <- readProcessWithExitCode "git" ["-C", herokuFolderPath ++ fileNameForEnv environment, "show", "--format=format:\"%an\"", "-s"] ""
  return name
 
 
@@ -137,7 +140,7 @@ parseStoryIds env = liftM storyIdForCommit commitMessages  where
     where
       commitMessage :: Int -> IO String
       commitMessage commitNum = do 
-        (_, name,_) <- readProcessWithExitCode "git" ["-C", herokuFolderName ++ fileNameForEnv env, "show", "HEAD~" ++ show commitNum, "--format=format:\"%s\"", "-s"] ""
+        (_, name,_) <- readProcessWithExitCode "git" ["-C", herokuFolderPath ++ fileNameForEnv env, "show", "HEAD~" ++ show commitNum, "--format=format:\"%s\"", "-s"] ""
         return name
 
 
@@ -145,8 +148,7 @@ analyzeCommits :: EnvironmentName -> IO Environment
 analyzeCommits environment = do 
   name <- lastCommitterName environment
   stories <- (pivotalStories <=< parseStoryIds) environment
-  let isFree = all storyAccepted stories
-  return $ Environment { lastCommitter = name, environmentName = environment, storiesAccepted = isFree, recentStories = stories }
+  return $ Environment { lastCommitter = name, environmentName = environment, recentStories = stories }
 
 environmentNames = [ "Alpha", "Echo", "Foxtrot", "Juliet", "Romeo", "Tango", "Whiskey" ] 
 
@@ -156,6 +158,6 @@ checkEnvironmentStatus envName = do
 
 main :: IO ()
 main = do 
-  mkDir herokuFolderName
+  mkDir herokuFolderPath
   putStrLn "Checking environments"
   MP.mapM checkRepo environmentNames >> return ()
