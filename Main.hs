@@ -33,19 +33,19 @@ data Environment = Environment { environmentName :: EnvironmentName, lastCommitt
 data PivotalStory = PivotalStory { pivotalStoryStatus :: T.Text, storyUpdatedAt :: Maybe UTCTime } deriving Show
 
 instance Show Environment where
- show (Environment name lastCommitter stories) 
+ show (Environment name lastCommitter stories)
     | all storyAccepted stories = colorGreen $ name ++ ": " ++ read lastCommitter ++ storyStatuses stories
     | otherwise                 = colorRed $ name ++ ": " ++ read lastCommitter ++ storyStatuses stories
 
 lowerString :: [Char] -> [Char]
 lowerString = map toLower
 
-colorGreen string = setSGRCode [SetColor Foreground Dull Green] ++ string ++ "\x1b[0m" 
+colorGreen string = setSGRCode [SetColor Foreground Dull Green] ++ string ++ "\x1b[0m"
 colorRed string = setSGRCode [SetColor Foreground Dull Red] ++ string ++ "\x1b[0m"
 
 storyStatuses :: [PivotalStory] -> String
-storyStatuses xs = let dateString = if (length pendingAcceptance > 0)  then 
-                                      "since " ++ formattedLastUpdatedDate 
+storyStatuses xs = let dateString = if (length pendingAcceptance > 0)  then
+                                      "since " ++ formattedLastUpdatedDate
                                       else "" in
                     " " ++ show (length pendingAcceptance) ++ " stories pending acceptance "  ++ dateString where
   formattedLastUpdatedDate = MB.maybe "" id $ formatTime defaultTimeLocale "%D" <$> lastUpdatedDate
@@ -69,24 +69,24 @@ pullRepo name = do
   return ()
 
 cloneRepo :: EnvironmentName -> IO ()
-cloneRepo name = do 
+cloneRepo name = do
   let url = gitUrlFor name
   putStrLn $ "Creating a local copy of: " ++ name ++ " in " ++ herokuFolderPath ++ fileNameForEnv name ++ " this might take a minute"
   readProcessWithExitCode "git" ["-C", herokuFolderPath, "clone", url] ""
   return ()
 
 hasLocalCopyOfRepo :: String -> IO Bool
-hasLocalCopyOfRepo name = do 
+hasLocalCopyOfRepo name = do
   (_, localDirContents, _) <- readProcessWithExitCode "ls" [herokuFolderPath] ""
   return $ T.isInfixOf (T.pack $ fileNameForEnv name) (T.pack localDirContents)
 
 checkRepo name = do
-  isTrue <- hasLocalCopyOfRepo name 
+  isTrue <- hasLocalCopyOfRepo name
   if isTrue then pullRepo name >> checkEnvironmentStatus name
   else cloneRepo name >> checkEnvironmentStatus name
 
 lastCommitterName :: String -> IO String
-lastCommitterName environment = do 
+lastCommitterName environment = do
  (_, name,_) <- readProcessWithExitCode "git" ["-C", herokuFolderPath ++ fileNameForEnv environment, "show", "--format=format:\"%an\"", "-s"] ""
  return name
 
@@ -98,12 +98,12 @@ textToDate  = parseTime defaultTimeLocale "%FT%X%QZ"
 pivotalStories :: [StoryId] -> IO [PivotalStory]
 pivotalStories storyIds = mapM getStory storyIds where
   getStory :: StoryId -> IO PivotalStory
-  getStory storyId = do 
+  getStory storyId = do
     apiToken <- liftM BCH.pack $ getEnv "PIVOTAL_TRACKER_API_TOKEN"
-    let options = defaults & header "X-TrackerToken" .~ [apiToken] 
-    res <- tryRequest (getWith options $ "https://www.pivotaltracker.com/services/v5/stories/" ++ storyId) 
-    case res of 
-      Right response -> do 
+    let options = defaults & header "X-TrackerToken" .~ [apiToken]
+    res <- tryRequest (getWith options $ "https://www.pivotaltracker.com/services/v5/stories/" ++ storyId)
+    case res of
+      Right response -> do
         let updatedAt = textToDate . T.unpack $ response ^. responseBody . key "updated_at" . _String
         let state =  response ^. responseBody . key "current_state" . _String
         return $ PivotalStory state updatedAt
@@ -112,10 +112,10 @@ pivotalStories storyIds = mapM getStory storyIds where
           -- We get a 403 when someone links to an epic
           403 -> return $ PivotalStory "invalid_story_id" Nothing
           404 -> return $ PivotalStory "invalid_story_id" Nothing
-          _   -> do
-            putStrLn $ "Could not process request for story: " ++ storyId ++ " defaulting to not accepted"
+          statusCode   -> do
+            putStrLn $ "Could not process request for story: " ++ storyId ++ ". openenvs received a " ++ show statusCode ++ " status from pivotal tracker. Defaulting to not accepted"
             return $ PivotalStory "not_accepted" Nothing
-    where 
+    where
       tryRequest :: IO a ->  IO (Either HttpException a)
       tryRequest = E.try
 
@@ -131,30 +131,30 @@ parseStoryIds env = liftM storyIdsFromCommits commitMessages  where
       parseStoryId = TR.matchRegex (TR.mkRegex "#([0-9]*)")
 
   commitMessages :: IO [CommitMessage]
-  commitMessages = do 
+  commitMessages = do
     messages <- mapM commitMessage [0..12]
     return $ messages
     where
       commitMessage :: Int -> IO String
-      commitMessage commitNum = do 
+      commitMessage commitNum = do
         (_, name,_) <- readProcessWithExitCode "git" ["-C", herokuFolderPath ++ fileNameForEnv env, "show", "HEAD~" ++ show commitNum, "--format=format:\"%s\"", "-s"] ""
         return name
 
 
 analyzeCommits :: EnvironmentName -> IO Environment
-analyzeCommits environment = do 
+analyzeCommits environment = do
   name <- lastCommitterName environment
   stories <- (pivotalStories <=< parseStoryIds) environment
   return $ Environment { lastCommitter = name, environmentName = environment, recentStories = stories }
 
-environmentNames = [ "Alpha", "Bravo", "Echo", "Foxtrot", "Juliet", "Romeo", "Tango", "Whiskey" ] 
+environmentNames = [ "Alpha", "Bravo", "Echo", "Foxtrot", "Juliet", "Romeo", "Tango", "Whiskey" ]
 
 checkEnvironmentStatus :: EnvironmentName -> IO ()
 checkEnvironmentStatus envName = do
   analyzeCommits envName >>= putStrLn . show
 
 main :: IO ()
-main = do 
+main = do
   mkDir herokuFolderPath
   putStrLn "Checking environments"
   MP.mapM checkRepo environmentNames >> return ()
