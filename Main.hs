@@ -21,6 +21,7 @@ import Control.Monad(liftM)
 import qualified Data.List as DL
 import qualified Data.Text as T
 import System.Process(readProcessWithExitCode)
+import System.Exit(ExitCode(..))
 import qualified Control.Monad.Parallel as MP
 
 type GitUrl = String
@@ -63,10 +64,10 @@ mkDir folderName = readProcessWithExitCode "mkdir" [folderName] ""
 fileNameForEnv :: String -> String
 fileNameForEnv name = "zephyr-" ++ lowerString name
 
-pullRepo :: EnvironmentName -> IO ()
+pullRepo :: EnvironmentName -> IO ExitCode
 pullRepo name = do
-  readProcessWithExitCode "git" ["-C", herokuFolderPath ++ (fileNameForEnv name), "pull", "-s", "ours"] ""
-  return ()
+  (exitStatus, _, _) <- readProcessWithExitCode "git" ["-C", herokuFolderPath ++ (fileNameForEnv name), "pull", "-s", "ours"] ""
+  return exitStatus
 
 cloneRepo :: EnvironmentName -> IO ()
 cloneRepo name = do
@@ -82,7 +83,11 @@ hasLocalCopyOfRepo name = do
 
 checkRepo name = do
   isTrue <- hasLocalCopyOfRepo name
-  if isTrue then pullRepo name >> checkEnvironmentStatus name
+  if isTrue then do 
+    pullStatus <- pullRepo name 
+    case pullStatus of
+      ExitSuccess -> checkEnvironmentStatus name
+      ExitFailure x -> putStrLn $ "Could not update local copy of: " ++ name ++ " git pull --rebase exited with a status code of: " ++ show x
   else cloneRepo name >> checkEnvironmentStatus name
 
 lastCommitterName :: String -> IO String
