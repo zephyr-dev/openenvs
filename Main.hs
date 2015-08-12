@@ -152,7 +152,7 @@ analyzeCommits environment = do
   stories <- (pivotalStories <=< parseStoryIds) environment
   return $ Environment { lastCommitter = name, environmentName = environment, recentStories = stories }
 
-environmentNames = [ "Alpha", "Bravo", "Echo", "Foxtrot", "Juliet", "Romeo", "Tango", "Whiskey" ]
+environmentNames = [ "Alpha", "Bravo", "Echo", "Delta", "Foxtrot", "Juliet", "Romeo", "Tango", "Whiskey" ]
 
 checkEnvironmentStatus :: EnvironmentName -> IO ()
 checkEnvironmentStatus envName = do
