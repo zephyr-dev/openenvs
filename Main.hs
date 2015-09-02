@@ -5,8 +5,8 @@ import Control.Monad.Trans.Reader(runReaderT, ReaderT, ask)
 import Control.Applicative((<$>))
 import Data.Time.Format     (parseTime, formatTime)
 import Data.Time.Clock      (UTCTime)
+import Data.Time.Format(defaultTimeLocale)
 import System.Console.ANSI
-import System.Locale        (defaultTimeLocale)
 import qualified Network.HTTP.Types as NHT
 import Control.Exception as E
 import Network.HTTP.Conduit(HttpException(StatusCodeException) )
@@ -28,6 +28,7 @@ import System.Exit(ExitCode(..))
 import qualified Control.Monad.Parallel as MP
 
 type GitUrl = String
+type HerokuFolderPath = String
 type CommitMessage = String
 type SHA = String
 type StoryId = String
@@ -67,13 +68,13 @@ mkDir folderName = readProcessWithExitCode "mkdir" [folderName] ""
 fileNameForEnv :: String -> String
 fileNameForEnv name = "zephyr-" ++ lowerString name
 
-pullRepo :: EnvironmentName -> ReaderT String IO ExitCode
+pullRepo :: EnvironmentName -> ReaderT HerokuFolderPath IO ExitCode
 pullRepo name = do
   herokuFolderPath <- ask
   (exitStatus, _, _) <- liftIO $ readProcessWithExitCode "git" ["-C", herokuFolderPath ++ (fileNameForEnv name), "pull", "-s", "ours"] ""
   return exitStatus
 
-cloneRepo :: EnvironmentName -> ReaderT String IO ()
+cloneRepo :: EnvironmentName -> ReaderT HerokuFolderPath IO ()
 cloneRepo name = do
   let url = gitUrlFor name
   herokuFolderPath <- ask
@@ -84,7 +85,7 @@ cloneRepo name = do
     ExitSuccess -> return()
     ExitFailure x -> liftIO . putStrLn $ "Cloning repo " ++ name ++ " failed! This is probably because you don't have access to: " ++ url ++ " git repository. Give yoself access and this'll work"
 
-hasLocalCopyOfRepo :: String -> ReaderT String IO Bool
+hasLocalCopyOfRepo :: String -> ReaderT HerokuFolderPath IO Bool
 hasLocalCopyOfRepo name = do
   herokuFolderPath <- ask
   (_, localDirContents, _) <- liftIO $ readProcessWithExitCode "ls" [herokuFolderPath] ""
@@ -102,7 +103,7 @@ checkRepo name = do
 
   else cloneRepo name >> checkEnvironmentStatus name
 
-lastCommitterName :: String -> ReaderT String IO String
+lastCommitterName :: String -> ReaderT HerokuFolderPath IO String
 lastCommitterName environment = do
   herokuFolderPath <- ask
   (_, name,_) <- liftIO $ readProcessWithExitCode "git" ["-C", herokuFolderPath ++ fileNameForEnv environment, "show", "--format=format:\"%an\"", "-s"] ""
@@ -113,7 +114,7 @@ lastCommitterName environment = do
 textToDate  :: String -> Maybe UTCTime
 textToDate  = parseTime defaultTimeLocale "%FT%X%QZ"
 
-pivotalStories :: [StoryId] -> ReaderT String IO [PivotalStory]
+pivotalStories :: [StoryId] -> ReaderT HerokuFolderPath IO [PivotalStory]
 pivotalStories storyIds = liftIO $ mapM getStory storyIds where
   getStory :: StoryId -> IO PivotalStory
   getStory storyId = do
@@ -140,7 +141,7 @@ pivotalStories storyIds = liftIO $ mapM getStory storyIds where
 storyAccepted :: PivotalStory -> Bool
 storyAccepted story = pivotalStoryStatus story == "accepted" || pivotalStoryStatus story == "invalid_story_id"
 
-parseStoryIds :: EnvironmentName -> ReaderT String IO [StoryId]
+parseStoryIds :: EnvironmentName -> ReaderT HerokuFolderPath IO [StoryId]
 parseStoryIds env = liftM storyIdsFromCommits commitMessages  where
   storyIdsFromCommits :: [CommitMessage] -> [StoryId]
   storyIdsFromCommits = DL.nub . concat . (MB.mapMaybe parseStoryId)
@@ -148,19 +149,19 @@ parseStoryIds env = liftM storyIdsFromCommits commitMessages  where
       parseStoryId :: CommitMessage -> Maybe [StoryId]
       parseStoryId = TR.matchRegex (TR.mkRegex "#([0-9]*)")
 
-  commitMessages :: ReaderT String IO [CommitMessage]
+  commitMessages :: ReaderT HerokuFolderPath IO [CommitMessage]
   commitMessages = do
     messages <- mapM commitMessage [0..12]
     return $ messages
     where
-      commitMessage :: Int -> ReaderT String IO String
+      commitMessage :: Int -> ReaderT HerokuFolderPath IO String
       commitMessage commitNum = do
         herokuFolderPath <- ask
         (_, name,_) <- liftIO $ readProcessWithExitCode "git" ["-C", herokuFolderPath ++ fileNameForEnv env, "show", "HEAD~" ++ show commitNum, "--format=format:\"%s\"", "-s"] ""
         return name
 
 
-analyzeCommits :: EnvironmentName -> ReaderT String IO Environment
+analyzeCommits :: EnvironmentName -> ReaderT HerokuFolderPath IO Environment
 analyzeCommits environment = do
   name <- lastCommitterName environment
   stories <- (pivotalStories <=< parseStoryIds) environment
@@ -168,7 +169,7 @@ analyzeCommits environment = do
 
 environmentNames = [ "Alpha", "Bravo", "Echo", "Delta", "Foxtrot", "Juliet", "Romeo", "Tango", "Whiskey" ]
 
-checkEnvironmentStatus :: EnvironmentName -> ReaderT String IO ()
+checkEnvironmentStatus :: EnvironmentName -> ReaderT HerokuFolderPath IO ()
 checkEnvironmentStatus envName = do
   analyzeCommits envName >>= liftIO . putStrLn . show
 
