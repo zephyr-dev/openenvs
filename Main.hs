@@ -1,5 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 import Data.Char(toLower)
+import Control.Monad.Trans(liftIO)
+import Control.Monad.Trans.Reader(runReaderT, ReaderT, ask)
 import Control.Applicative((<$>))
 import Data.Time.Format     (parseTime, formatTime)
 import Data.Time.Clock      (UTCTime)
@@ -12,6 +14,7 @@ import qualified Data.ByteString.Char8 as BCH
 import qualified Data.ByteString.Lazy as BL
 import Data.Aeson.Lens (_String, key)
 import Network.Wreq
+import System.Directory(getHomeDirectory, createDirectoryIfMissing, renameDirectory, doesDirectoryExist)
 import System.Environment
 import Control.Lens
 import Control.Monad((<=<))
@@ -57,51 +60,61 @@ storyStatuses xs = let dateString = if (length pendingAcceptance > 0)  then
 gitUrlFor :: String -> GitUrl
 gitUrlFor envName = "git@heroku.com:zephyr-" ++ lowerString envName ++ ".git"
 
-herokuFolderPath = "/Users/gust/workspace/heroku_envs/"
+deprecatedHerokuFolderPath = "/Users/gust/workspace/heroku_envs/"
 
 mkDir folderName = readProcessWithExitCode "mkdir" [folderName] ""
 
 fileNameForEnv :: String -> String
 fileNameForEnv name = "zephyr-" ++ lowerString name
 
-pullRepo :: EnvironmentName -> IO ExitCode
+pullRepo :: EnvironmentName -> ReaderT String IO ExitCode
 pullRepo name = do
-  (exitStatus, _, _) <- readProcessWithExitCode "git" ["-C", herokuFolderPath ++ (fileNameForEnv name), "pull", "-s", "ours"] ""
+  herokuFolderPath <- ask
+  (exitStatus, _, _) <- liftIO $ readProcessWithExitCode "git" ["-C", herokuFolderPath ++ (fileNameForEnv name), "pull", "-s", "ours"] ""
   return exitStatus
 
-cloneRepo :: EnvironmentName -> IO ()
+cloneRepo :: EnvironmentName -> ReaderT String IO ()
 cloneRepo name = do
   let url = gitUrlFor name
-  putStrLn $ "Creating a local copy of: " ++ name ++ " in " ++ herokuFolderPath ++ fileNameForEnv name ++ " this might take a minute"
-  readProcessWithExitCode "git" ["-C", herokuFolderPath, "clone", url] ""
-  return ()
+  herokuFolderPath <- ask
+  liftIO $ putStrLn $ "Creating a local copy of: " ++ name ++ " in " ++ herokuFolderPath ++ fileNameForEnv name ++ " this might take a minute"
 
-hasLocalCopyOfRepo :: String -> IO Bool
+  (exitStatus, _, _) <- liftIO $ readProcessWithExitCode "git" ["-C", herokuFolderPath, "clone", url] ""
+  case exitStatus of 
+    ExitSuccess -> return()
+    ExitFailure x -> liftIO . putStrLn $ "Cloning repo " ++ name ++ " failed! This is probably because you don't have access to: " ++ url ++ " git repository. Give yoself access and this'll work"
+
+hasLocalCopyOfRepo :: String -> ReaderT String IO Bool
 hasLocalCopyOfRepo name = do
-  (_, localDirContents, _) <- readProcessWithExitCode "ls" [herokuFolderPath] ""
+  herokuFolderPath <- ask
+  (_, localDirContents, _) <- liftIO $ readProcessWithExitCode "ls" [herokuFolderPath] ""
   return $ T.isInfixOf (T.pack $ fileNameForEnv name) (T.pack localDirContents)
 
 checkRepo name = do
+  herokuFolderPath <- ask
   isTrue <- hasLocalCopyOfRepo name
-  if isTrue then do 
-    pullStatus <- pullRepo name 
+  if isTrue then do
+    pullStatus <- pullRepo name
+    let fixMessage = "cd " ++ herokuFolderPath ++ " && git status\n" ++ "If there is a merge conflict abort the merge and try again. If there is uncommited work remove it and try again"
     case pullStatus of
       ExitSuccess -> checkEnvironmentStatus name
-      ExitFailure x -> putStrLn $ "Could not update local copy of: " ++ name ++ " git pull --rebase exited with a status code of: " ++ show x
+      ExitFailure x -> liftIO . putStrLn $ "Could not update local copy of: " ++ name ++ " pulling the environment failed. This is usually due to uncommited changes in that git directory. I don't know why this happens. To fix the is run\n"
+
   else cloneRepo name >> checkEnvironmentStatus name
 
-lastCommitterName :: String -> IO String
+lastCommitterName :: String -> ReaderT String IO String
 lastCommitterName environment = do
- (_, name,_) <- readProcessWithExitCode "git" ["-C", herokuFolderPath ++ fileNameForEnv environment, "show", "--format=format:\"%an\"", "-s"] ""
- return name
+  herokuFolderPath <- ask
+  (_, name,_) <- liftIO $ readProcessWithExitCode "git" ["-C", herokuFolderPath ++ fileNameForEnv environment, "show", "--format=format:\"%an\"", "-s"] ""
+  return name
 
 
 
 textToDate  :: String -> Maybe UTCTime
 textToDate  = parseTime defaultTimeLocale "%FT%X%QZ"
 
-pivotalStories :: [StoryId] -> IO [PivotalStory]
-pivotalStories storyIds = mapM getStory storyIds where
+pivotalStories :: [StoryId] -> ReaderT String IO [PivotalStory]
+pivotalStories storyIds = liftIO $ mapM getStory storyIds where
   getStory :: StoryId -> IO PivotalStory
   getStory storyId = do
     apiToken <- liftM BCH.pack $ getEnv "PIVOTAL_TRACKER_API_TOKEN"
@@ -127,7 +140,7 @@ pivotalStories storyIds = mapM getStory storyIds where
 storyAccepted :: PivotalStory -> Bool
 storyAccepted story = pivotalStoryStatus story == "accepted" || pivotalStoryStatus story == "invalid_story_id"
 
-parseStoryIds :: EnvironmentName -> IO [StoryId]
+parseStoryIds :: EnvironmentName -> ReaderT String IO [StoryId]
 parseStoryIds env = liftM storyIdsFromCommits commitMessages  where
   storyIdsFromCommits :: [CommitMessage] -> [StoryId]
   storyIdsFromCommits = DL.nub . concat . (MB.mapMaybe parseStoryId)
@@ -135,18 +148,19 @@ parseStoryIds env = liftM storyIdsFromCommits commitMessages  where
       parseStoryId :: CommitMessage -> Maybe [StoryId]
       parseStoryId = TR.matchRegex (TR.mkRegex "#([0-9]*)")
 
-  commitMessages :: IO [CommitMessage]
+  commitMessages :: ReaderT String IO [CommitMessage]
   commitMessages = do
     messages <- mapM commitMessage [0..12]
     return $ messages
     where
-      commitMessage :: Int -> IO String
+      commitMessage :: Int -> ReaderT String IO String
       commitMessage commitNum = do
-        (_, name,_) <- readProcessWithExitCode "git" ["-C", herokuFolderPath ++ fileNameForEnv env, "show", "HEAD~" ++ show commitNum, "--format=format:\"%s\"", "-s"] ""
+        herokuFolderPath <- ask
+        (_, name,_) <- liftIO $ readProcessWithExitCode "git" ["-C", herokuFolderPath ++ fileNameForEnv env, "show", "HEAD~" ++ show commitNum, "--format=format:\"%s\"", "-s"] ""
         return name
 
 
-analyzeCommits :: EnvironmentName -> IO Environment
+analyzeCommits :: EnvironmentName -> ReaderT String IO Environment
 analyzeCommits environment = do
   name <- lastCommitterName environment
   stories <- (pivotalStories <=< parseStoryIds) environment
@@ -154,12 +168,18 @@ analyzeCommits environment = do
 
 environmentNames = [ "Alpha", "Bravo", "Echo", "Delta", "Foxtrot", "Juliet", "Romeo", "Tango", "Whiskey" ]
 
-checkEnvironmentStatus :: EnvironmentName -> IO ()
+checkEnvironmentStatus :: EnvironmentName -> ReaderT String IO ()
 checkEnvironmentStatus envName = do
-  analyzeCommits envName >>= putStrLn . show
+  analyzeCommits envName >>= liftIO . putStrLn . show
 
 main :: IO ()
 main = do
-  mkDir herokuFolderPath
-  putStrLn "Checking environments"
-  MP.mapM checkRepo environmentNames >> return ()
+  homeDir <- getHomeDirectory
+  let herokuFolderPath = homeDir ++ "/heroku_envs/"
+  hasDeprecatedFolderPath <- doesDirectoryExist deprecatedHerokuFolderPath
+  createDirectoryIfMissing False herokuFolderPath
+  if hasDeprecatedFolderPath then renameDirectory deprecatedHerokuFolderPath herokuFolderPath
+                             else return ()
+  flip runReaderT herokuFolderPath $ do
+    liftIO $ putStrLn "Checking environments"
+    MP.mapM checkRepo environmentNames >> return ()

@@ -34,6 +34,9 @@ executable openenvs
     , ansi-terminal
     , time
     , old-locale
+    , mtl
+    , transformers
+    , directory
 
   -- hs-source-dirs:      
   default-language:    Haskell2010
