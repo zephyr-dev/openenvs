@@ -142,23 +142,24 @@ storyAccepted :: PivotalStory -> Bool
 storyAccepted story = pivotalStoryStatus story == "accepted" || pivotalStoryStatus story == "invalid_story_id"
 
 parseStoryIds :: EnvironmentName -> ReaderT HerokuFolderPath IO [StoryId]
-parseStoryIds env = liftM storyIdsFromCommits commitMessages  where
-  storyIdsFromCommits :: [CommitMessage] -> [StoryId]
-  storyIdsFromCommits = DL.nub . concat . (MB.mapMaybe parseStoryId)
-    where
-      parseStoryId :: CommitMessage -> Maybe [StoryId]
-      parseStoryId = TR.matchRegex (TR.mkRegex "#([0-9]*)")
+parseStoryIds env = liftM storyIdsFromCommits (commitMessages env)
 
-  commitMessages :: ReaderT HerokuFolderPath IO [CommitMessage]
-  commitMessages = do
-    messages <- mapM commitMessage [0..12]
-    return $ messages
-    where
-      commitMessage :: Int -> ReaderT HerokuFolderPath IO String
-      commitMessage commitNum = do
-        herokuFolderPath <- ask
-        (_, name,_) <- liftIO $ readProcessWithExitCode "git" ["-C", herokuFolderPath ++ fileNameForEnv env, "show", "HEAD~" ++ show commitNum, "--format=format:\"%s\"", "-s"] ""
-        return name
+storyIdsFromCommits :: [CommitMessage] -> [StoryId]
+storyIdsFromCommits = DL.nub . concat . (MB.mapMaybe parseStoryId)
+
+parseStoryId :: CommitMessage -> Maybe [StoryId]
+parseStoryId = TR.matchRegex (TR.mkRegex "#([0-9]+)")
+
+commitMessages :: EnvironmentName -> ReaderT HerokuFolderPath IO [CommitMessage]
+commitMessages env = do
+  messages <- mapM commitMessage [0..12]
+  return $ messages
+  where
+    commitMessage :: Int -> ReaderT HerokuFolderPath IO String
+    commitMessage commitNum = do
+      herokuFolderPath <- ask
+      (_, name,_) <- liftIO $ readProcessWithExitCode "git" ["-C", herokuFolderPath ++ fileNameForEnv env, "show", "HEAD~" ++ show commitNum, "--format=format:\"%s\"", "-s"] ""
+      return name
 
 
 analyzeCommits :: EnvironmentName -> ReaderT HerokuFolderPath IO Environment
