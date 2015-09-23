@@ -99,7 +99,7 @@ checkRepo name = do
     let fixMessage = "cd " ++ herokuFolderPath ++ " && git status\n" ++ "If there is a merge conflict abort the merge and try again. If there is uncommited work remove it and try again"
     case pullStatus of
       ExitSuccess -> checkEnvironmentStatus name
-      ExitFailure x -> liftIO . putStrLn $ "Could not update local copy of: " ++ name ++ " pulling the environment failed. This is usually due to uncommited changes in that git directory. I don't know why this happens. To fix the is run\n"
+      ExitFailure x -> liftIO . putStrLn $ "Could not update local copy of: " ++ name ++ ". Pulling the environment failed. Run 'git -C " ++ herokuFolderPath ++ (fileNameForEnv name) ++ " pull -s ours' too see why"
 
   else cloneRepo name >> checkEnvironmentStatus name
 
