@@ -71,7 +71,7 @@ fileNameForEnv name = "zephyr-" ++ lowerString name
 pullRepo :: EnvironmentName -> ReaderT HerokuFolderPath IO ExitCode
 pullRepo name = do
   herokuFolderPath <- ask
-  (exitStatus, _, _) <- liftIO $ readProcessWithExitCode "git" ["-C", herokuFolderPath ++ (fileNameForEnv name), "pull", "-s", "ours"] ""
+  (exitStatus, _, _) <- liftIO $ readProcessWithExitCode "git" ["-C", herokuFolderPath ++ (fileNameForEnv name), "pull", "-s", "ours", "--rebase"] ""
   return exitStatus
 
 cloneRepo :: EnvironmentName -> ReaderT HerokuFolderPath IO ()
@@ -83,7 +83,7 @@ cloneRepo name = do
   (exitStatus, _, _) <- liftIO $ readProcessWithExitCode "git" ["-C", herokuFolderPath, "clone", url] ""
   case exitStatus of 
     ExitSuccess -> return()
-    ExitFailure x -> liftIO . putStrLn $ "Cloning repo " ++ name ++ " failed! This is probably because you don't have access to: " ++ url ++ " git repository. Give yoself access and this'll work"
+    ExitFailure x -> liftIO . putStrLn $ "The command " ++ "'git -C " ++ herokuFolderPath ++ " clone " ++ url ++ "' failed!"
 
 hasLocalCopyOfRepo :: String -> ReaderT HerokuFolderPath IO Bool
 hasLocalCopyOfRepo name = do
@@ -99,7 +99,7 @@ checkRepo name = do
     let fixMessage = "cd " ++ herokuFolderPath ++ " && git status\n" ++ "If there is a merge conflict abort the merge and try again. If there is uncommited work remove it and try again"
     case pullStatus of
       ExitSuccess -> checkEnvironmentStatus name
-      ExitFailure x -> liftIO . putStrLn $ "Could not update local copy of: " ++ name ++ ". Pulling the environment failed. Run 'git -C " ++ herokuFolderPath ++ (fileNameForEnv name) ++ " pull -s ours' too see why"
+      ExitFailure x -> liftIO . putStrLn $ "The command 'git -C " ++ herokuFolderPath ++ (fileNameForEnv name) ++ " pull -s ours --rebase' failed!"
 
   else cloneRepo name >> checkEnvironmentStatus name
 
