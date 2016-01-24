@@ -4,7 +4,7 @@ import qualified Git.Interpreters.IO as Git
 import qualified Git.Commands as Git
 import qualified System.Interpreters.IO as SI
 import Control.Monad.Trans.Either(runEitherT)
-import System.Commands(getEnv', createDirectoryIfMissing', getHomeDir', print')
+import System.Commands(doesFileExist', getEnv', createDirectoryIfMissing', getHomeDir', print')
 import Types(Config(..))
 
 
@@ -16,5 +16,8 @@ main = do
     createDirectoryIfMissing' False herokuFolderPath
     return $ Config token herokuFolderPath
   runEitherT $ Git.interpret $ do
-    Git.gitClone' (herokuFolderPath config) "https://github.com/zephyr-dev/openenvs.git"
+    doesFileExist <- Git.liftGit $ do
+      doesFileExist' "openenvs"
+    if doesFileExist then Git.gitClone' (herokuFolderPath config) "https://github.com/zephyr-dev/openenvs.git"
+    else Git.gitPull' "openenvs"
   return ()
