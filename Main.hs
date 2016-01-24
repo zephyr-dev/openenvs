@@ -25,6 +25,6 @@ main = do
 
 updateEnvironment path (name, repo) = do
     let fullPath = path ++ name
-    doesFileExist <- doesFileExist' fullPath
-    if doesFileExist then gitPull' fullPath
+    doesDirectoryExist <- doesDirectoryExist' fullPath
+    if doesDirectoryExist then gitPull' fullPath
     else gitClone' path repo

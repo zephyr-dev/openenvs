@@ -17,8 +17,8 @@ getEnv' key = liftF $ GetEnv key id
 createDirectoryIfMissing' :: Bool -> String -> Program ()
 createDirectoryIfMissing' bool dir = liftF $ CreateDirIfMissing bool dir ()
 
-doesFileExist' :: String -> Program Bool
-doesFileExist' fileName = liftF $ DoesFileExist fileName id
+doesDirectoryExist' :: String -> Program Bool
+doesDirectoryExist' fileName = liftF $ DoesDirectoryExist fileName id
 
 getHomeDir' :: Program String
 getHomeDir' = liftF $ GetHomeDir id

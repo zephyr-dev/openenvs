@@ -1,11 +1,27 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Program.Interpreter where
+import qualified Data.List as DL
+import qualified Data.Maybe as MB
+import Control.Applicative((<$>))
 import System.Process(readProcessWithExitCode)
+import qualified Text.Regex as TR
+import qualified Data.Text as T
+import Data.Time.Format     (parseTime)
+import Data.Time.Format(defaultTimeLocale)
+import Data.Time.Clock      (UTCTime)
+import Network.Wreq(defaults, header, getWith, responseBody)
+import Control.Exception as E
+import qualified Network.HTTP.Types as NHT
+import Control.Lens((&), (.~), (^.))
+import Network.HTTP.Conduit(HttpException(StatusCodeException) )
+import Data.Aeson.Lens (_String, key)
 import System.Exit(ExitCode (..))
 import Control.Monad.Trans.Either(right, left, runEitherT, EitherT)
 import Control.Monad.Trans(liftIO)
 import Program.Types
+import qualified Data.ByteString.Char8 as BCH
 
-import System.Directory(doesFileExist, getHomeDirectory, createDirectoryIfMissing)
+import System.Directory(doesDirectoryExist, getHomeDirectory, createDirectoryIfMissing)
 import Control.Monad.Free(Free(..), liftF)
 import System.Environment(getEnv)
 
@@ -16,33 +32,48 @@ interpretIO (Free (GetEnv s fn))                 =  (liftIO $ getEnv s) >>= inte
 interpretIO (Free (PrintF s n))                  =  (liftIO $ print s) >> interpretIO n
 interpretIO (Free (GetHomeDir f))                =  (liftIO getHomeDirectory) >>= interpretIO . f
 interpretIO (Free (CreateDirIfMissing b dir n))  =  (liftIO $ createDirectoryIfMissing b dir) >> interpretIO n
-interpretIO (Free (DoesFileExist file f))        =  (liftIO $ doesFileExist file) >>= interpretIO . f
+interpretIO (Free (DoesDirectoryExist file f))        =  (liftIO $ doesDirectoryExist file) >>= interpretIO . f
 interpretIO (Pure a)                             =  return a
 interpretIO (Free (GitPull path n))              =  gitPull path >> interpretIO n
 interpretIO (Free (GitClone path repoName n))    =  gitClone path repoName >> interpretIO n
 interpretIO (Free (GetStory token storyId fn))         =  getStory token storyId >>= interpretIO . fn
+interpretIO (Free (ParseCommitLog repoPath fn))         =  parseCommitLog repoPath >>= interpretIO . fn
+
+textToDate  :: String -> Maybe UTCTime
+textToDate  = parseTime defaultTimeLocale "%FT%X%QZ"
 
 getStory :: String -> StoryId -> EIO PivotalStory
-getStory storyId = undefined 
-  {- apiToken <- liftM BCH.pack $ getEnv "PIVOTAL_TRACKER_API_TOKEN" -}
-  {- let options = defaults & header "X-TrackerToken" .~ [apiToken] -}
-  {- res <- tryRequest (getWith options $ "https://www.pivotaltracker.com/services/v5/stories/" ++ storyId) -}
-  {- case res of -}
-    {- Right response -> do -}
-      {- let updatedAt = textToDate . T.unpack $ response ^. responseBody . key "updated_at" . _String -}
-      {- let state =  response ^. responseBody . key "current_state" . _String -}
-      {- return $ PivotalStory state updatedAt -}
-    {- Left (StatusCodeException status headers _) -> do -}
-      {- case NHT.statusCode status of -}
-        {- -- We get a 403 when someone links to an epic -}
-        {- 403 -> return $ PivotalStory "invalid_story_id" Nothing -}
-        {- 404 -> return $ PivotalStory "invalid_story_id" Nothing -}
-        {- statusCode   -> do -}
-          {- putStrLn $ "Could not process request for story: " ++ storyId ++ ". openenvs received a " ++ show statusCode ++ " status from pivotal tracker. Defaulting to not accepted" -}
-          {- return $ PivotalStory "not_accepted" Nothing -}
-  {- where -}
-    {- tryRequest :: IO a ->  IO (Either HttpException a) -}
-    {- tryRequest = E.try -}
+getStory token storyId = do
+  let options = defaults & header "X-TrackerToken" .~ [BCH.pack token]
+  res <- liftIO $ tryRequest (getWith options $ "https://www.pivotaltracker.com/services/v5/stories/" ++ show storyId)
+  case res of
+    Right response -> do
+      let updatedAt = textToDate . T.unpack $ response ^. responseBody . key "updated_at" . _String
+      let state =  response ^. responseBody . key "current_state" . _String
+      return $ PivotalStory state updatedAt
+    Left (StatusCodeException status headers _) -> do
+      case NHT.statusCode status of
+        403 -> return $ PivotalStory "invalid_story_id" Nothing
+        404 -> return $ PivotalStory "invalid_story_id" Nothing
+        statusCode   -> return $ PivotalStory "not_accepted" Nothing
+  where
+    tryRequest :: IO a ->  IO (Either HttpException a)
+    tryRequest = E.try
+
+parseCommitLog :: String -> EIO [StoryId]
+parseCommitLog repoPath = storyIdsFromCommits <$> commitMessages repoPath
+  where
+    storyIdsFromCommits :: [String] -> [StoryId]
+    storyIdsFromCommits = DL.nub . concat . (MB.mapMaybe parseStoryId) where
+      parseStoryId :: String -> Maybe [StoryId]
+      parseStoryId commitMessage = (fmap read) <$> TR.matchRegex (TR.mkRegex "#([0-9]+)") commitMessage
+    commitMessages :: String -> EIO [String]
+    commitMessages repoPath = mapM (commitMessage repoPath) [0..12]
+      where
+        commitMessage :: String -> Int -> EIO String
+        commitMessage repoPath commitNum = do
+          (_, name,_) <- liftIO $ readProcessWithExitCode "git" ["-C", repoPath, "show", "HEAD~" ++ show commitNum, "--format=format:\"%s\"", "-s"] ""
+          return name
 
 gitClone :: String -> String -> EIO ()
 gitClone path url = do
