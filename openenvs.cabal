@@ -19,16 +19,12 @@ executable openenvs
   main-is:             Main.hs
   ghc-options: -O2 -threaded -eventlog -rtsopts -with-rtsopts=-N4-l-s
   other-modules:
-    Git.Commands
-    Git.Interpreters.IO
-    Git.Types
-    System.Commands
-    System.Interpreters.IO
-    System.Types
-    Types
-  -- other-extensions:    
+    Program.Commands
+    Program.Interpreter
+    Program.Types
+  -- other-extensions:
 
-  build-depends:       
+  build-depends:
     base >=4.7 && <4.9
     , process
     , text
