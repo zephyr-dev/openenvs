@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main where
+import Control.Monad((>=>))
 import Control.Monad.Trans.Either(runEitherT)
 import Program.Interpreter(interpretIO)
 import Program.Commands
@@ -14,10 +15,12 @@ main = do
     token            <- getEnv' "PIVOTAL_TRACKER_API_TOKEN"
     herokuFolderPath <- (++ "/heroku_envs/") <$> getHomeDir'
     createDirectoryIfMissing' False herokuFolderPath
-    mapM (updateEnvironment herokuFolderPath) environments
+    _ <- mapM (updateEnvironment herokuFolderPath) environments
+    _ <- mapM (parseCommitLog herokuFolderPath >=> getPivotalStories token) environments
+    return ()
   case result of
-    Right a -> putStrLn $ "Success!"
     Left a -> putStrLn $ "Error: " ++ a
+    Right a -> putStrLn "success"
 
 
 updateEnvironment path (name, repo) = do

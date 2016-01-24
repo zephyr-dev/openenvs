@@ -20,6 +20,29 @@ interpretIO (Free (DoesFileExist file f))        =  (liftIO $ doesFileExist file
 interpretIO (Pure a)                             =  return a
 interpretIO (Free (GitPull path n))              =  gitPull path >> interpretIO n
 interpretIO (Free (GitClone path repoName n))    =  gitClone path repoName >> interpretIO n
+interpretIO (Free (GetStory token storyId fn))         =  getStory token storyId >>= interpretIO . fn
+
+getStory :: String -> StoryId -> EIO PivotalStory
+getStory storyId = undefined 
+  {- apiToken <- liftM BCH.pack $ getEnv "PIVOTAL_TRACKER_API_TOKEN" -}
+  {- let options = defaults & header "X-TrackerToken" .~ [apiToken] -}
+  {- res <- tryRequest (getWith options $ "https://www.pivotaltracker.com/services/v5/stories/" ++ storyId) -}
+  {- case res of -}
+    {- Right response -> do -}
+      {- let updatedAt = textToDate . T.unpack $ response ^. responseBody . key "updated_at" . _String -}
+      {- let state =  response ^. responseBody . key "current_state" . _String -}
+      {- return $ PivotalStory state updatedAt -}
+    {- Left (StatusCodeException status headers _) -> do -}
+      {- case NHT.statusCode status of -}
+        {- -- We get a 403 when someone links to an epic -}
+        {- 403 -> return $ PivotalStory "invalid_story_id" Nothing -}
+        {- 404 -> return $ PivotalStory "invalid_story_id" Nothing -}
+        {- statusCode   -> do -}
+          {- putStrLn $ "Could not process request for story: " ++ storyId ++ ". openenvs received a " ++ show statusCode ++ " status from pivotal tracker. Defaulting to not accepted" -}
+          {- return $ PivotalStory "not_accepted" Nothing -}
+  {- where -}
+    {- tryRequest :: IO a ->  IO (Either HttpException a) -}
+    {- tryRequest = E.try -}
 
 gitClone :: String -> String -> EIO ()
 gitClone path url = do

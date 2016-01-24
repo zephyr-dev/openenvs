@@ -17,7 +17,7 @@ cabal-version:       >=1.10
 
 executable openenvs
   main-is:             Main.hs
-  ghc-options: -O2 -threaded -eventlog -rtsopts -with-rtsopts=-N4-l-s
+  ghc-options: -O2 -threaded -eventlog -rtsopts -with-rtsopts=-N4-l-s -Wall
   other-modules:
     Program.Commands
     Program.Interpreter

@@ -22,3 +22,13 @@ doesFileExist' fileName = liftF $ DoesFileExist fileName id
 
 getHomeDir' :: Program String
 getHomeDir' = liftF $ GetHomeDir id
+
+parseCommitLog :: String -> (String, String) -> Program [StoryId]
+parseCommitLog path (name, _) = liftF $ ParseCommitLog (path ++ name) id
+
+getPivotalStories :: String -> [StoryId] -> Program [PivotalStory]
+getPivotalStories token storyIds = mapM getStory storyIds
+  where
+    getStory :: StoryId -> Program PivotalStory
+    getStory storyId = liftF $ GetStory token storyId id
+
