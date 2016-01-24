@@ -23,6 +23,7 @@ interpretIO (Free (GitClone path repoName n))    =  gitClone path repoName >> in
 
 gitClone :: String -> String -> EIO ()
 gitClone path url = do
+  liftIO $ print "cloning"
   (exitStatus, _, _) <- liftIO $ readProcessWithExitCode "git" ["-C", path, "clone", url] ""
   case exitStatus of
     ExitSuccess -> right ()
@@ -30,7 +31,8 @@ gitClone path url = do
 
 gitPull :: String -> EIO ()
 gitPull repoPath = do
+  liftIO $ print $ "pulling " ++ repoPath
   (exitStatus, _, _) <- liftIO $ readProcessWithExitCode "git" ["-C", repoPath, "pull", "-s", "ours", "--rebase"] ""
   case exitStatus of
-    ExitSuccess -> right ()
-    _           -> left "err"
+    ExitSuccess        -> right ()
+    (ExitFailure a)    -> left $ "Error pulling status code: " ++ show a

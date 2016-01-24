@@ -5,13 +5,23 @@ import Program.Interpreter(interpretIO)
 import Program.Commands
 
 
+environments :: [(String, String)]
+environments = [("openenvs", "https://github.com/zephyr-dev/openenvs.git")]
+
 main :: IO ()
 main = do
-  runEitherT $ interpretIO $ do
+  result <- runEitherT $ interpretIO $ do
     token            <- getEnv' "PIVOTAL_TRACKER_API_TOKEN"
     herokuFolderPath <- (++ "/heroku_envs/") <$> getHomeDir'
     createDirectoryIfMissing' False herokuFolderPath
-    doesFileExist <- doesFileExist' "openenvs"
-    if doesFileExist then gitClone' herokuFolderPath "https://github.com/zephyr-dev/openenvs.git"
-    else gitPull' "openenvs"
-  return ()
+    mapM (updateEnvironment herokuFolderPath) environments
+  case result of
+    Right a -> putStrLn $ "Success!"
+    Left a -> putStrLn $ "Error: " ++ a
+
+
+updateEnvironment path (name, repo) = do
+    let fullPath = path ++ name
+    doesFileExist <- doesFileExist' fullPath
+    if doesFileExist then gitPull' fullPath
+    else gitClone' path repo
