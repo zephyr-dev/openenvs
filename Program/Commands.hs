@@ -31,4 +31,3 @@ getPivotalStories token storyIds = mapM getStory storyIds
   where
     getStory :: StoryId -> Program PivotalStory
     getStory storyId = liftF $ GetStory token storyId id
-
