@@ -9,5 +9,3 @@ main = do
   case result of
     Left a -> putStrLn $ "Error: " ++ a
     Right a -> putStrLn "success"
-
-

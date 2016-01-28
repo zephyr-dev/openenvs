@@ -1,10 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Program.Interpreter where
-import qualified Data.List as DL
-import qualified Data.Maybe as MB
 import Control.Applicative((<$>))
 import System.Process(readProcessWithExitCode)
-import qualified Text.Regex as TR
 import qualified Data.Text as T
 import Data.Time.Format     (parseTime)
 import Data.Time.Format(defaultTimeLocale)
@@ -37,10 +34,17 @@ interpretIO (Pure a)                             =  return a
 interpretIO (Free (GitPull path n))              =  gitPull path >> interpretIO n
 interpretIO (Free (GitClone path repoName n))    =  gitClone path repoName >> interpretIO n
 interpretIO (Free (GetStory token storyId fn))         =  getStory token storyId >>= interpretIO . fn
-interpretIO (Free (ParseCommitLog repoPath fn))         =  parseCommitLog repoPath >>= interpretIO . fn
+interpretIO (Free (GitShow path commitNum fn))         =  gitShow path commitNum >>= interpretIO . fn
 
 textToDate  :: String -> Maybe UTCTime
 textToDate  = parseTime defaultTimeLocale "%FT%X%QZ"
+
+gitShow :: String -> Int -> EIO String
+gitShow path commitNum = do
+  (exitCode, commitMessage, _) <- liftIO $ readProcessWithExitCode "git" ["-C", path, "show", "HEAD~" ++ show commitNum, "--format=format:\"%s\"", "-s"] "" 
+  case exitCode of
+    ExitSuccess          -> right commitMessage
+    ExitFailure status   -> left $ "Reading commit message for " ++ path ++ " resulted in exit code of "  ++ show status
 
 getStory :: String -> StoryId -> EIO PivotalStory
 getStory token storyId = do
@@ -59,21 +63,6 @@ getStory token storyId = do
   where
     tryRequest :: IO a ->  IO (Either HttpException a)
     tryRequest = E.try
-
-parseCommitLog :: String -> EIO [StoryId]
-parseCommitLog repoPath = storyIdsFromCommits <$> commitMessages repoPath
-  where
-    storyIdsFromCommits :: [String] -> [StoryId]
-    storyIdsFromCommits = DL.nub . concat . (MB.mapMaybe parseStoryId) where
-      parseStoryId :: String -> Maybe [StoryId]
-      parseStoryId commitMessage = (fmap read) <$> TR.matchRegex (TR.mkRegex "#([0-9]+)") commitMessage
-    commitMessages :: String -> EIO [String]
-    commitMessages repoPath = mapM (commitMessage repoPath) [0..12]
-      where
-        commitMessage :: String -> Int -> EIO String
-        commitMessage repoPath commitNum = do
-          (_, name,_) <- liftIO $ readProcessWithExitCode "git" ["-C", repoPath, "show", "HEAD~" ++ show commitNum, "--format=format:\"%s\"", "-s"] ""
-          return name
 
 gitClone :: String -> String -> EIO ()
 gitClone path url = do

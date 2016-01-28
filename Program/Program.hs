@@ -1,7 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Program.Program(runProgram) where
+import Control.Applicative((<$>))
+import PivotalTracker.Story(storyIdsFromCommits)
 import Program.Types(Program)
-import Control.Monad((>=>))
+import Control.Monad((>=>), forM_)
 import Program.Commands
 
 
@@ -11,8 +13,10 @@ runProgram = do
   herokuFolderPath <- (++ "/heroku_envs/") <$> getHomeDir'
   createDirectoryIfMissing' False herokuFolderPath
   _ <- mapM (updateEnvironment herokuFolderPath) environments
-  _ <- mapM (parseCommitLog herokuFolderPath >=> getPivotalStories token) environments
-  return ()
+  forM_ environments $ \(name, _) -> do
+    recentStoryIds <- storyIdsFromCommits <$> mapM (\i -> gitShow' (herokuFolderPath ++ name) i) [0..12]
+    stories <- getPivotalStories token recentStoryIds
+    return ()
 
 updateEnvironment path (name, repo) = do
     let fullPath = path ++ name
