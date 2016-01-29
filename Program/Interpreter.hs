@@ -21,4 +21,3 @@ interpretIO (Free (GitPull path n))              =  gitPull path >> interpretIO 
 interpretIO (Free (GitClone path repoName n))    =  gitClone path repoName >> interpretIO n
 interpretIO (Free (GetStory token storyId fn))   =  getStory token storyId >>= interpretIO . fn
 interpretIO (Free (GitShow options fn))          =  gitShow options >>= interpretIO . fn
-

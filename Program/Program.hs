@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Program.Program(program) where
-import Program.Environments
+import Program.Environments(HerokuEnvironment(..), pathTo, humanName, gitRepoFor)
 import PivotalTracker.Story(storyIdsFromCommits)
 import Program.Types(Program, Environment(Environment))
 import Control.Monad(forM_)

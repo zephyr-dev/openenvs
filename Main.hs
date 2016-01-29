@@ -9,4 +9,4 @@ main = do
   result <- runEitherT $ interpretIO program
   case result of
     Left a -> putStrLn $ "Error: " ++ a
-    Right a -> putStrLn "success"
+    Right a -> return ()
