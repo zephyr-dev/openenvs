@@ -18,7 +18,7 @@ import Control.Monad.Trans(liftIO)
 import Data.List(intercalate)
 import Program.Types
 import qualified Data.ByteString.Char8 as BCH
-import Program.Types.Git(GitOption, optionsToCliArguments)
+import Program.Types.Git(GitOption(..), optionsToCliArguments)
 
 import System.Directory(doesDirectoryExist, getHomeDirectory, createDirectoryIfMissing)
 import Control.Monad.Free(Free(..), liftF)
@@ -28,7 +28,7 @@ type EIO = EitherT String IO
 
 interpretIO :: Program a -> EIO a
 interpretIO (Free (GetEnv s fn))                 =  (liftIO $ getEnv s) >>= interpretIO . fn
-interpretIO (Free (PrintF s n))                  =  (liftIO $ print s) >> interpretIO n
+interpretIO (Free (PrintF s n))                  =  (liftIO $ putStrLn s) >> interpretIO n
 interpretIO (Free (GetHomeDir f))                =  (liftIO getHomeDirectory) >>= interpretIO . f
 interpretIO (Free (CreateDirIfMissing b dir n))  =  (liftIO $ createDirectoryIfMissing b dir) >> interpretIO n
 interpretIO (Free (DoesDirectoryExist file f))        =  (liftIO $ doesDirectoryExist file) >>= interpretIO . f
@@ -43,20 +43,15 @@ textToDate  = parseTime defaultTimeLocale "%FT%X%QZ"
 
 gitShow :: [GitOption] -> EIO String
 gitShow options = do
-  (exitCode, commitMessage, _) <- liftIO $ readProcessWithExitCode "git" (["show"] ++ (optionsToCliArguments options)) "" --, "-C", path, "HEAD~" ++ show commitNum, "--format=format:\"%s\"", "-s"] "" 
+  (exitCode, commitMessage, _) <- liftIO $ readProcessWithExitCode "git" (optionsToCliArguments (Show:options)) ""
   case exitCode of
     ExitSuccess          -> right commitMessage
     ExitFailure status   -> left $ "Failed to run command git show " ++ (intercalate " " $ optionsToCliArguments options)  ++ " status was: " ++ show status
 
-{- lastCommitterName :: String -> ReaderT HerokuFolderPath IO String -}
-{- lastCommitterName environment = do -}
-  {- herokuFolderPath <- ask -}
-  {- (_, name,_) <- liftIO $ readProcessWithExitCode "git" ["-C", herokuFolderPath ++ fileNameForEnv environment, "show", "--format=format:\"%an\"", "-s"] "" -}
-
-getStory :: String -> StoryId -> EIO PivotalStory
+getStory :: String -> String -> EIO PivotalStory
 getStory token storyId = do
   let options = defaults & header "X-TrackerToken" .~ [BCH.pack token]
-  res <- liftIO $ tryRequest (getWith options $ "https://www.pivotaltracker.com/services/v5/stories/" ++ show storyId)
+  res <- liftIO $ tryRequest (getWith options $ "https://www.pivotaltracker.com/services/v5/stories/" ++ storyId)
   case res of
     Right response -> do
       let updatedAt = textToDate . T.unpack $ response ^. responseBody . key "updated_at" . _String
@@ -73,7 +68,6 @@ getStory token storyId = do
 
 gitClone :: String -> String -> EIO ()
 gitClone path url = do
-  liftIO $ print "cloning"
   (exitStatus, _, _) <- liftIO $ readProcessWithExitCode "git" ["-C", path, "clone", url] ""
   case exitStatus of
     ExitSuccess -> right ()
@@ -81,7 +75,6 @@ gitClone path url = do
 
 gitPull :: String -> EIO ()
 gitPull repoPath = do
-  liftIO $ print $ "pulling " ++ repoPath
   (exitStatus, _, _) <- liftIO $ readProcessWithExitCode "git" ["-C", repoPath, "pull", "-s", "ours", "--rebase"] ""
   case exitStatus of
     ExitSuccess        -> right ()

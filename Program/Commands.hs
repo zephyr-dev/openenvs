@@ -9,8 +9,8 @@ gitPull' path = liftF $ GitPull path ()
 gitClone' :: String -> String -> Program ()
 gitClone' path repoName = liftF $ GitClone path repoName ()
 
-print' :: String -> Program ()
-print' s = liftF $ PrintF s ()
+print' :: Show a => a -> Program ()
+print' s = liftF $ PrintF (show s) ()
 
 getEnv' :: String -> Program String
 getEnv' key = liftF $ GetEnv key id
@@ -27,8 +27,8 @@ getHomeDir' = liftF $ GetHomeDir id
 gitShow' :: [GitOption] -> Program String
 gitShow' options = liftF $ GitShow options id
 
-getPivotalStories :: String -> [StoryId] -> Program [PivotalStory]
+getPivotalStories :: String -> [String] -> Program [PivotalStory]
 getPivotalStories token storyIds = mapM getStory storyIds
   where
-    getStory :: StoryId -> Program PivotalStory
+    getStory :: String -> Program PivotalStory
     getStory storyId = liftF $ GetStory token storyId id

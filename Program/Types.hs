@@ -15,9 +15,8 @@ type Program = Free Interaction
 data PivotalStory = PivotalStory {
   pivotalStoryStatus :: Text,
   storyUpdatedAt :: (Maybe UTCTime)
-}
+} deriving Show
 
-type StoryId = [Int]
 data Environment = Environment {
   environmentName :: String,
   lastCommitter :: String,
@@ -27,13 +26,17 @@ data Environment = Environment {
 storyAccepted :: PivotalStory -> Bool
 storyAccepted story = pivotalStoryStatus story == "accepted" || pivotalStoryStatus story == "invalid_story_id"
 
-colorGreen string = setSGRCode [SetColor Foreground Dull Green] ++ string ++ "\x1b[0m"
-colorRed string = setSGRCode [SetColor Foreground Dull Red] ++ string ++ "\x1b[0m"
+colorGreen :: String -> String
+colorGreen string = setSGRCode [SetColor Foreground Dull Green] ++ string ++ resetCode
+colorRed :: String -> String
+colorRed string = setSGRCode [SetColor Foreground Dull Red] ++ string ++ resetCode
+
+resetCode = "\x1b[0m"
 
 instance Show Environment where
  show (Environment name lastCommitter stories)
-    | all storyAccepted stories = colorGreen $ name ++ ": " ++ read lastCommitter ++ storyStatuses stories
-    | otherwise                 = colorRed $ name ++ ": " ++ read lastCommitter ++ storyStatuses stories
+    | all storyAccepted stories = colorGreen $ name ++ ": " ++ lastCommitter ++ storyStatuses stories
+    | otherwise                 = colorRed $ name ++ ": " ++ lastCommitter ++ storyStatuses stories
 
 storyStatuses :: [PivotalStory] -> String
 storyStatuses xs = let dateString = if (length pendingAcceptance > 0)  then
@@ -50,7 +53,7 @@ data Interaction next =
   GetHomeDir (String -> next) |
   DoesDirectoryExist String (Bool -> next) |
   CreateDirIfMissing Bool String next |
-  GetStory String StoryId (PivotalStory -> next) |
+  GetStory String String (PivotalStory -> next) |
   GitPull String next |
   GitShow [GitOption] (String -> next) |
   GitClone String String next   deriving (Functor)

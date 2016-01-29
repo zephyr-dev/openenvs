@@ -19,6 +19,10 @@ executable openenvs
   main-is:             Main.hs
   ghc-options: -O2 -threaded -eventlog -rtsopts -with-rtsopts=-N4-l-s -Wall
   other-modules:
+    PivotalTracker.Story
+    Program.Environments
+    Program.Program
+    Program.Types.Git
     Program.Commands
     Program.Interpreter
     Program.Types

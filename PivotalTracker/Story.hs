@@ -4,7 +4,7 @@ import qualified Text.Regex as TR
 import qualified Data.Maybe as MB
 import Data.Maybe(Maybe)
 
-storyIdsFromCommits :: [String] -> [[Int]]
+storyIdsFromCommits :: [String] -> [String]
 storyIdsFromCommits = DL.nub . concat . (MB.mapMaybe parseStoryId) where
-  parseStoryId :: String -> Maybe [[Int]]
-  parseStoryId commitMessage = (fmap read) <$> TR.matchRegex (TR.mkRegex "#([0-9]+)") commitMessage
+  parseStoryId :: String -> Maybe [String]
+  parseStoryId commitMessage = TR.matchRegex (TR.mkRegex "#([0-9]+)") commitMessage

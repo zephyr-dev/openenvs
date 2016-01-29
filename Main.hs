@@ -5,6 +5,7 @@ import Program.Program(runProgram)
 
 main :: IO ()
 main = do
+  putStrLn "Checking Environments"
   result <- runEitherT $ interpretIO runProgram
   case result of
     Left a -> putStrLn $ "Error: " ++ a
