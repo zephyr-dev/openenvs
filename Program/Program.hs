@@ -1,10 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Program.Program(program) where
 import Program.Environments
-import Control.Applicative((<$>))
 import PivotalTracker.Story(storyIdsFromCommits)
 import Program.Types(Program, Environment(Environment))
-import Control.Monad((>=>), forM_)
+import Control.Monad(forM_)
 import Git.Types(GitOption(..), FormatOption(..))
 import Program.Commands
 

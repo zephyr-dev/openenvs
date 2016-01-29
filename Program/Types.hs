@@ -8,8 +8,6 @@ import Data.Time.Format     (formatTime)
 import Data.Time.Format(defaultTimeLocale)
 import Control.Monad.Free(Free(..))
 import System.Console.ANSI(setSGRCode, SGR(..), ConsoleLayer(Foreground), ColorIntensity(Dull), Color(Green, Red))
-import Data.Text(Text)
-import Data.Time.Clock      (UTCTime)
 import PivotalTracker.Story(PivotalStory(..), storyAccepted)
 type Program = Free Interaction
 
@@ -36,12 +34,13 @@ colorGreen string = setSGRCode [SetColor Foreground Dull Green] ++ string ++ res
 colorRed :: String -> String
 colorRed string = setSGRCode [SetColor Foreground Dull Red] ++ string ++ resetCode
 
+resetCode :: String
 resetCode = "\x1b[0m"
 
 instance Show Environment where
- show (Environment name lastCommitter stories)
-    | all storyAccepted stories = colorGreen $ name ++ ": " ++ lastCommitter ++ storyStatuses stories
-    | otherwise                 = colorRed $ name ++ ": " ++ lastCommitter ++ storyStatuses stories
+ show (Environment name lastCommitterName stories)
+    | all storyAccepted stories = colorGreen $ name ++ ": " ++ lastCommitterName ++ storyStatuses stories
+    | otherwise                 = colorRed $ name ++ ": " ++ lastCommitterName ++ storyStatuses stories
 
 storyStatuses :: [PivotalStory] -> String
 storyStatuses xs = let dateString = if (length pendingAcceptance > 0)  then

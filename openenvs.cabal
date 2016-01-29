@@ -21,6 +21,8 @@ executable openenvs
   other-modules:
     PivotalTracker.Story
     Program.Environments
+    Git.Actions
+    PivotalTracker.Types
     Program.Program
     Git.Types
     Program.Commands
