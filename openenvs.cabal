@@ -22,7 +22,7 @@ executable openenvs
     PivotalTracker.Story
     Program.Environments
     Program.Program
-    Program.Types.Git
+    Git.Types
     Program.Commands
     Program.Interpreter
     Program.Types

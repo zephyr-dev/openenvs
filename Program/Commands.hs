@@ -1,7 +1,8 @@
 module Program.Commands where
 import Control.Monad.Free(liftF, Free(..))
-import Program.Types.Git(GitOption)
+import Git.Types(GitOption)
 import Program.Types
+import PivotalTracker.Types(PivotalStory(..))
 
 gitPull' :: String -> Program ()
 gitPull' path = liftF $ GitPull path ()

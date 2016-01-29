@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Program.Types where
 import qualified Data.Maybe as MB
-import Program.Types.Git(GitOption)
+import Git.Types(GitOption)
 import qualified Data.List as DL
 import Data.Time.Format     (formatTime)
 import Data.Time.Format(defaultTimeLocale)
@@ -10,21 +10,26 @@ import Control.Monad.Free(Free(..))
 import System.Console.ANSI(setSGRCode, SGR(..), ConsoleLayer(Foreground), ColorIntensity(Dull), Color(Green, Red))
 import Data.Text(Text)
 import Data.Time.Clock      (UTCTime)
+import PivotalTracker.Story(PivotalStory(..), storyAccepted)
 type Program = Free Interaction
 
-data PivotalStory = PivotalStory {
-  pivotalStoryStatus :: Text,
-  storyUpdatedAt :: (Maybe UTCTime)
-} deriving Show
+data Interaction next =
+  GetEnv String (String -> next) |
+  PrintF String next |
+  GetHomeDir (String -> next) |
+  DoesDirectoryExist String (Bool -> next) |
+  CreateDirIfMissing Bool String next |
+  GetStory String String (PivotalStory -> next) |
+  GitPull String next |
+  GitShow [GitOption] (String -> next) |
+  GitClone String String next   deriving (Functor)
+
 
 data Environment = Environment {
   environmentName :: String,
   lastCommitter :: String,
   recentStories :: [PivotalStory]
 }
-
-storyAccepted :: PivotalStory -> Bool
-storyAccepted story = pivotalStoryStatus story == "accepted" || pivotalStoryStatus story == "invalid_story_id"
 
 colorGreen :: String -> String
 colorGreen string = setSGRCode [SetColor Foreground Dull Green] ++ string ++ resetCode
@@ -46,15 +51,4 @@ storyStatuses xs = let dateString = if (length pendingAcceptance > 0)  then
   formattedLastUpdatedDate = MB.maybe "" id $ formatTime defaultTimeLocale "%D" <$> lastUpdatedDate
   lastUpdatedDate = MB.listToMaybe . reverse . DL.sort  . MB.catMaybes $ map storyUpdatedAt pendingAcceptance
   pendingAcceptance = filter (not . storyAccepted) xs
-
-data Interaction next =
-  GetEnv String (String -> next) |
-  PrintF String next |
-  GetHomeDir (String -> next) |
-  DoesDirectoryExist String (Bool -> next) |
-  CreateDirIfMissing Bool String next |
-  GetStory String String (PivotalStory -> next) |
-  GitPull String next |
-  GitShow [GitOption] (String -> next) |
-  GitClone String String next   deriving (Functor)
 

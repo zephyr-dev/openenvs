@@ -1,16 +1,16 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Program.Program(runProgram) where
+module Program.Program(program) where
 import Program.Environments
 import Control.Applicative((<$>))
 import PivotalTracker.Story(storyIdsFromCommits)
 import Program.Types(Program, Environment(Environment))
 import Control.Monad((>=>), forM_)
-import Program.Types.Git(GitOption(..), FormatOption(..))
+import Git.Types(GitOption(..), FormatOption(..))
 import Program.Commands
 
 
-runProgram :: Program ()
-runProgram = do
+program :: Program ()
+program = do
   token            <- getEnv' "PIVOTAL_TRACKER_API_TOKEN"
   herokuFolderPath <- (++ "/heroku_envs/") <$> getHomeDir'
   createDirectoryIfMissing' False herokuFolderPath
@@ -22,8 +22,8 @@ runProgram = do
     lastCommitterName <- read <$> gitShow' [Path fullPath, Format AuthorName, NoPatch]
     let environment =  Environment (humanName env) lastCommitterName stories
     print' environment
-    return ()
 
+updateEnvironment :: String -> HerokuEnvironment -> Program ()
 updateEnvironment path env = do
     let fullPath = pathTo path env
     doesDirectoryExist <- doesDirectoryExist' fullPath

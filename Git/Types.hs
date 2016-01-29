@@ -1,4 +1,4 @@
-module Program.Types.Git where
+module Git.Types where
 import Data.List
 
 data FormatOption = Subject | AuthorName deriving (Show, Eq, Ord)
