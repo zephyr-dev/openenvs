@@ -15,8 +15,10 @@ import Data.Aeson.Lens (_String, key)
 import System.Exit(ExitCode (..))
 import Control.Monad.Trans.Either(right, left, runEitherT, EitherT)
 import Control.Monad.Trans(liftIO)
+import Data.List(intercalate)
 import Program.Types
 import qualified Data.ByteString.Char8 as BCH
+import Program.Types.Git(GitOption, optionsToCliArguments)
 
 import System.Directory(doesDirectoryExist, getHomeDirectory, createDirectoryIfMissing)
 import Control.Monad.Free(Free(..), liftF)
@@ -34,17 +36,22 @@ interpretIO (Pure a)                             =  return a
 interpretIO (Free (GitPull path n))              =  gitPull path >> interpretIO n
 interpretIO (Free (GitClone path repoName n))    =  gitClone path repoName >> interpretIO n
 interpretIO (Free (GetStory token storyId fn))         =  getStory token storyId >>= interpretIO . fn
-interpretIO (Free (GitShow path commitNum fn))         =  gitShow path commitNum >>= interpretIO . fn
+interpretIO (Free (GitShow options fn))         =  gitShow options >>= interpretIO . fn
 
 textToDate  :: String -> Maybe UTCTime
 textToDate  = parseTime defaultTimeLocale "%FT%X%QZ"
 
-gitShow :: String -> Int -> EIO String
-gitShow path commitNum = do
-  (exitCode, commitMessage, _) <- liftIO $ readProcessWithExitCode "git" ["-C", path, "show", "HEAD~" ++ show commitNum, "--format=format:\"%s\"", "-s"] "" 
+gitShow :: [GitOption] -> EIO String
+gitShow options = do
+  (exitCode, commitMessage, _) <- liftIO $ readProcessWithExitCode "git" (["show"] ++ (optionsToCliArguments options)) "" --, "-C", path, "HEAD~" ++ show commitNum, "--format=format:\"%s\"", "-s"] "" 
   case exitCode of
     ExitSuccess          -> right commitMessage
-    ExitFailure status   -> left $ "Reading commit message for " ++ path ++ " resulted in exit code of "  ++ show status
+    ExitFailure status   -> left $ "Failed to run command git show " ++ (intercalate " " $ optionsToCliArguments options)  ++ " status was: " ++ show status
+
+{- lastCommitterName :: String -> ReaderT HerokuFolderPath IO String -}
+{- lastCommitterName environment = do -}
+  {- herokuFolderPath <- ask -}
+  {- (_, name,_) <- liftIO $ readProcessWithExitCode "git" ["-C", herokuFolderPath ++ fileNameForEnv environment, "show", "--format=format:\"%an\"", "-s"] "" -}
 
 getStory :: String -> StoryId -> EIO PivotalStory
 getStory token storyId = do

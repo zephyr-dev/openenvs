@@ -4,6 +4,7 @@ import Control.Applicative((<$>))
 import PivotalTracker.Story(storyIdsFromCommits)
 import Program.Types(Program)
 import Control.Monad((>=>), forM_)
+import Program.Types.Git(GitOption(..), FormatOption(..))
 import Program.Commands
 
 
@@ -14,8 +15,12 @@ runProgram = do
   createDirectoryIfMissing' False herokuFolderPath
   _ <- mapM (updateEnvironment herokuFolderPath) environments
   forM_ environments $ \(name, _) -> do
-    recentStoryIds <- storyIdsFromCommits <$> mapM (\i -> gitShow' (herokuFolderPath ++ name) i) [0..12]
+    let fullPath = herokuFolderPath ++ name
+    recentStoryIds <- storyIdsFromCommits <$> mapM (\int -> gitShow' [Path fullPath, Head int, Format Subject, NoPatch] ) [0..12]
     stories <- getPivotalStories token recentStoryIds
+    lastCommiterName <- gitShow' [Path fullPath, Format AuthorName, NoPatch]
+    print' lastCommiterName
+    print' $ show recentStoryIds
     return ()
 
 updateEnvironment path (name, repo) = do

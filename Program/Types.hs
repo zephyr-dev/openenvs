@@ -2,6 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Program.Types where
 import qualified Data.Maybe as MB
+import Program.Types.Git(GitOption)
 import qualified Data.List as DL
 import Data.Time.Format     (formatTime)
 import Data.Time.Format(defaultTimeLocale)
@@ -51,6 +52,6 @@ data Interaction next =
   CreateDirIfMissing Bool String next |
   GetStory String StoryId (PivotalStory -> next) |
   GitPull String next |
-  GitShow String Int (String -> next) |
+  GitShow [GitOption] (String -> next) |
   GitClone String String next   deriving (Functor)
 

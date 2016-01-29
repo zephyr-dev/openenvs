@@ -1,5 +1,6 @@
 module Program.Commands where
 import Control.Monad.Free(liftF, Free(..))
+import Program.Types.Git(GitOption)
 import Program.Types
 
 gitPull' :: String -> Program ()
@@ -23,8 +24,8 @@ doesDirectoryExist' fileName = liftF $ DoesDirectoryExist fileName id
 getHomeDir' :: Program String
 getHomeDir' = liftF $ GetHomeDir id
 
-gitShow' :: String -> Int -> Program String
-gitShow' path num = liftF $ GitShow path num id
+gitShow' :: [GitOption] -> Program String
+gitShow' options = liftF $ GitShow options id
 
 getPivotalStories :: String -> [StoryId] -> Program [PivotalStory]
 getPivotalStories token storyIds = mapM getStory storyIds
