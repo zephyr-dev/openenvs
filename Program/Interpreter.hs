@@ -6,8 +6,8 @@ import Control.Monad.Trans(liftIO)
 import Program.Types
 
 import System.Directory(doesDirectoryExist, getHomeDirectory, createDirectoryIfMissing)
-import Control.Monad.Free(Free(..))
 import System.Environment(getEnv)
+import Control.Monad.Free(Free(..))
 
 
 interpretIO :: Program a -> EitherT String IO a

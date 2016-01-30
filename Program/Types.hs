@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveFunctor     #-}
+{-# LANGUAGE ExistentialQuantification     #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Program.Types where
 import qualified Data.Maybe as MB
@@ -12,15 +13,22 @@ import PivotalTracker.Story(PivotalStory(..), storyAccepted)
 type Program = Free Interaction
 
 data Interaction next =
-  GetEnv String (String -> next) |
-  PrintF String next |
-  GetHomeDir (String -> next) |
-  DoesDirectoryExist String (Bool -> next) |
-  CreateDirIfMissing Bool String next |
-  GetStory String String (PivotalStory -> next) |
-  GitPull String next |
-  GitShow [GitOption] (String -> next) |
-  GitClone String String next   deriving (Functor)
+  GetEnv String (String -> next)
+  | PrintF String next
+  | GetHomeDir (String -> next)
+  | DoesDirectoryExist String (Bool -> next)
+  | forall a. Const a (a -> next)
+  | CreateDirIfMissing Bool String next
+  | GetStory String String (PivotalStory -> next)
+  | GitPull String next
+  | GitShow [GitOption] (String -> next)
+  | GitClone String String next
+
+
+instance Functor Interaction where
+  fmap = error "define fmap"
+  fmap f (GetEnv s fn) = GetEnv s $ fmap f fn
+  
 
 
 data Environment = Environment {
