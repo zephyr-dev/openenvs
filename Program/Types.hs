@@ -26,10 +26,16 @@ data Interaction next =
 
 
 instance Functor Interaction where
-  fmap = error "define fmap"
-  fmap f (GetEnv s fn) = GetEnv s $ fmap f fn
-  
-
+  fmap f (GetEnv s fn) = GetEnv s (fmap f fn)
+  fmap f (PrintF s n) = PrintF s (f n)
+  fmap f (GetHomeDir fn) = GetHomeDir (fmap f fn)
+  fmap f (DoesDirectoryExist s fn ) = DoesDirectoryExist s (fmap f fn)
+  fmap f (Const a fn)  = Const a (fmap f fn)
+  fmap f (CreateDirIfMissing b s n)  = CreateDirIfMissing b s (f n)
+  fmap f (GetStory s s1 fn) = GetStory s s1 (fmap f fn)
+  fmap f (GitPull s n)  = GitPull s (f n)
+  fmap f (GitShow xs fn ) = GitShow xs (fmap f fn)
+  fmap f (GitClone s s1 n) = GitClone s s1 (f n)
 
 data Environment = Environment {
   environmentName :: String,
