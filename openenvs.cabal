@@ -38,6 +38,7 @@ executable openenvs
     , regex-compat
     , wreq
     , lens
+    , comonad >= 4.2 && < 4.3
     , lens-aeson
     , bytestring
     , http-conduit
