@@ -5,8 +5,7 @@ module Program.Types where
 import qualified Data.Maybe as MB
 import Git.Types(GitOption)
 import qualified Data.List as DL
-import Data.Time.Format     (formatTime)
-import Data.Time.Format(defaultTimeLocale)
+import Data.Time.Format   (formatTime, defaultTimeLocale)
 import Control.Monad.Free(Free(..))
 import System.Console.ANSI(setSGRCode, SGR(..), ConsoleLayer(Foreground), ColorIntensity(Dull), Color(Green, Red))
 import PivotalTracker.Story(PivotalStory(..), storyAccepted)
@@ -17,25 +16,11 @@ data Interaction next =
   | PrintF String next
   | GetHomeDir (String -> next)
   | DoesDirectoryExist String (Bool -> next)
-  | forall a. Const a (a -> next)
   | CreateDirIfMissing Bool String next
   | GetStory String String (PivotalStory -> next)
   | GitPull String next
   | GitShow [GitOption] (String -> next)
-  | GitClone String String next
-
-
-instance Functor Interaction where
-  fmap f (GetEnv s fn) = GetEnv s (fmap f fn)
-  fmap f (PrintF s n) = PrintF s (f n)
-  fmap f (GetHomeDir fn) = GetHomeDir (fmap f fn)
-  fmap f (DoesDirectoryExist s fn ) = DoesDirectoryExist s (fmap f fn)
-  fmap f (Const a fn)  = Const a (fmap f fn)
-  fmap f (CreateDirIfMissing b s n)  = CreateDirIfMissing b s (f n)
-  fmap f (GetStory s s1 fn) = GetStory s s1 (fmap f fn)
-  fmap f (GitPull s n)  = GitPull s (f n)
-  fmap f (GitShow xs fn ) = GitShow xs (fmap f fn)
-  fmap f (GitClone s s1 n) = GitClone s s1 (f n)
+  | GitClone String String next deriving Functor
 
 data Environment = Environment {
   environmentName :: String,

@@ -20,9 +20,6 @@ interpretIO (Free f) =
     Left (Debug f)  -> do
       liftIO $ putStrLn "Debuggin"
       interpretIO f
-    Left (Id f)  -> do
-      liftIO $ putStrLn "Debuggin"
-      interpretIO f
     Right (GetEnv s fn)                 ->  liftIO (getEnv s) >>= interpretIO . fn
     Right (PrintF s n)                  ->  liftIO (putStrLn s) >> interpretIO n
     Right (GetHomeDir f)                ->  liftIO getHomeDirectory >>= interpretIO . f
