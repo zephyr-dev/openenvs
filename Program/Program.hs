@@ -23,11 +23,11 @@ program = do
     print' environment
 
 updateEnvironment :: String -> HerokuEnvironment -> Program ()
-updateEnvironment path env = do
-    let fullPath = pathTo path env
+updateEnvironment basePath env = do
+    let fullPath = pathTo basePath env
     doesDirectoryExist <- doesDirectoryExist' fullPath
     if doesDirectoryExist then gitPull' fullPath
-    else gitClone' path (gitRepoFor env)
+    else gitClone' basePath (gitRepoFor env)
 
 environments :: [HerokuEnvironment]
 environments = [Alpha .. Whiskey]

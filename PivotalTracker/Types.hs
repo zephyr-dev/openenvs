@@ -7,5 +7,5 @@ import Data.Maybe(Maybe)
 data PivotalStory = PivotalStory {
   pivotalStoryStatus :: T.Text,
   storyUpdatedAt :: (Maybe UTCTime)
-} 
+}
 

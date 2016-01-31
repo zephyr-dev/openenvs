@@ -9,7 +9,7 @@ import Data.Functor.Coproduct(left, right, Coproduct)
 -- Free (Coproduct LogF Interaction) a -> Free (Coproduct LogF Interaction) b -> Free (Coproduct LogF Interaction) b 
 -- Coproduct Left Debug "GetEnv" *> Coproduct Right GetEnv "GetENv" -> Coproduct Right GetEnv "GetENv"
 withLogging :: Program a -> Free (Coproduct LogF Interaction) a
-withLogging program = toLeft (logDebug program) *> toRight program
+withLogging program = toLeft (logDebug program) *> toRight program 
 
 toLeft :: Log a -> Free (Coproduct LogF Interaction) a
 toLeft (Free f) = liftF (left f) >>= toLeft
