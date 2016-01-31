@@ -17,7 +17,7 @@ gitPull repoPath = do
 
 gitShow :: [GitOption] -> EIO String
 gitShow options = do
-  (exitCode, commitMessage, _) <- liftIO $ readProcessWithExitCode "git" (optionsToCliArguments (Show:options)) ""
+  (exitCode, commitMessage, _) <- liftIO $ readProcessWithExitCode "git" (optionsToCliArguments $ showOptions options) ""
   case exitCode of
     ExitSuccess          -> right commitMessage
     ExitFailure status   -> left $ "Failed to run command git show " ++ (intercalate " " $ optionsToCliArguments options)  ++ " status was: " ++ show status

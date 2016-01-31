@@ -6,25 +6,23 @@ import System.Directory(doesDirectoryExist, getHomeDirectory, createDirectoryIfM
 import System.Environment(getEnv)
 import Program.Types
 import Control.Monad.Free(Free(..))
-import Program.Types(Interaction)
 import Data.Functor.Coproduct(Coproduct(..))
 import Control.Monad.Trans.Either(EitherT)
 import Control.Monad.Trans(liftIO)
-import qualified Program.Interpreter as PI
 
 type EIO = EitherT String IO
-interpretIO :: Free (Coproduct LogF Interaction) a -> EIO a
+interpretIO :: Show a => Free (Coproduct LogF Interaction) a -> EIO a
 interpretIO (Pure a) = return a
 interpretIO (Free f) =
   case getCoproduct f of
-    Left (Debug f)  -> do
-      liftIO $ putStrLn "Debuggin"
-      interpretIO f
+    Left (Debug s next)  -> do
+      liftIO $ putStrLn s
+      interpretIO next
     Right (GetEnv s fn)                 ->  liftIO (getEnv s) >>= interpretIO . fn
     Right (PrintF s n)                  ->  liftIO (putStrLn s) >> interpretIO n
-    Right (GetHomeDir f)                ->  liftIO getHomeDirectory >>= interpretIO . f
+    Right (GetHomeDir fn)                ->  liftIO getHomeDirectory >>= interpretIO . fn
     Right (CreateDirIfMissing b dir n)  ->  liftIO (createDirectoryIfMissing b dir) >> interpretIO n
-    Right (DoesDirectoryExist file f)   ->  liftIO (doesDirectoryExist file) >>= interpretIO . f
+    Right (DoesDirectoryExist file fn)   ->  liftIO (doesDirectoryExist file) >>= interpretIO . fn
     Right (GitPull path n)              ->  gitPull path >> interpretIO n
     Right (GitClone path repoName n)    ->  gitClone path repoName >> interpretIO n
     Right (GetStory token storyId fn)   ->  getStory token storyId >>= interpretIO . fn

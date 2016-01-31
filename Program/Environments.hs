@@ -7,7 +7,7 @@ pathTo :: String -> HerokuEnvironment -> String
 pathTo basePath env = basePath ++ (envName env)
 
 gitRepoFor :: HerokuEnvironment -> String
-gitRepoFor env =  "https://github.com/zephyr-dev/" ++ (envName env) ++ ".git"
+gitRepoFor env =  "https://git.heroku.com/" ++ (envName env) ++ ".git"
 
 envName :: HerokuEnvironment -> String
 envName = (map toLower) . ("zephyr-" ++) . show

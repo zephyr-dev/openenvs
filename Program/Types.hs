@@ -20,7 +20,18 @@ data Interaction next =
   | GetStory String String (PivotalStory -> next)
   | GitPull String next
   | GitShow [GitOption] (String -> next)
-  | GitClone String String next deriving Functor
+  | GitClone String String next deriving (Functor)
+
+instance Show (Interaction a) where
+  show (GetEnv _ _) = "GetEnv"
+  show (PrintF _ _) = "PrintF"
+  show (GetHomeDir _) = "GetHomeDir"
+  show (DoesDirectoryExist  _ _) = "DoesDirectoryExist"
+  show (CreateDirIfMissing _ _ _) = "CreateDirIfMissing"
+  show (GetStory _ _ _) = "GetStory"
+  show (GitPull _ _) = "GitPull"
+  show (GitShow _ _) = "GitShow"
+  show (GitClone _ _ _) = "GitClone"
 
 data Environment = Environment {
   environmentName :: String,
